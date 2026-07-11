@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>토큰 계산기</title>
+  <style>
+    :root {
+      --bg: #16171d; --panel: #1e2028; --border: #33363f;
+      --text: #e8e9ed; --dim: #9a9daa; --accent: #7aa2f7; --green: #9ece6a; --red: #f7768e;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text);
+      font-family: 'Pretendard', 'Noto Sans KR', system-ui, sans-serif; line-height: 1.5; }
+    main { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; }
+    h1 { font-size: 1.6rem; margin: 8px 0 20px; }
+    h1 small { color: var(--dim); font-size: 0.85rem; font-weight: normal; margin-left: 8px; }
+    label { color: var(--dim); font-size: 0.85rem; display: block; margin: 14px 0 4px; }
+    select, textarea, input[type=text], input[type=number], input[type=password] {
+      width: 100%; background: var(--panel); color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+      font-size: 0.95rem; font-family: inherit;
+    }
+    textarea { min-height: 160px; resize: vertical; }
+    select:focus, textarea:focus, input:focus { outline: 1px solid var(--accent); }
+    .stats { display: flex; gap: 28px; flex-wrap: wrap; margin: 20px 0; }
+    .stat .k { color: var(--dim); font-size: 0.8rem; }
+    .stat .v { font-size: 1.9rem; font-weight: 800; }
+    .stat input { width: 110px; font-size: 1.3rem; font-weight: 700; padding: 4px 8px; }
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin: 12px 0; }
+    .panel h3 { margin: 0 0 10px; font-size: 1rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+    td { padding: 3px 0; color: var(--dim); }
+    td:last-child { text-align: right; color: var(--text); }
+    tr.total td { border-top: 1px solid var(--border); padding-top: 6px; font-weight: 700; color: var(--text); }
+    .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .row > * { flex: none; }
+    .row select { width: auto; }
+    .dim { color: var(--dim); font-size: 0.8rem; }
+    .green { color: var(--green); }
+    .red { color: var(--red); }
+    button { background: var(--accent); color: #16171d; border: none; border-radius: 8px;
+      padding: 9px 16px; font-weight: 700; cursor: pointer; font-size: 0.9rem; }
+    button:disabled { opacity: 0.5; cursor: default; }
+    button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+    details { margin: 12px 0; }
+    summary { color: var(--dim); cursor: pointer; font-size: 0.85rem; }
+    .tokens-raw { font-size: 0.75rem; color: var(--dim); word-break: break-all;
+      max-height: 200px; overflow-y: auto; margin-top: 8px; }
+    .price-edit { display: none; margin-top: 10px; }
+    .price-edit.open { display: block; }
+    .price-edit input { width: 130px; }
+    .hint { font-size: 0.78rem; color: var(--dim); margin-top: 6px; }
+    input[type=checkbox] { accent-color: var(--accent); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>토큰 계산기 <small>token calculator</small></h1>
+
+    <label for="model">모델</label>
+    <select id="model"></select>
+    <div class="hint" id="price-status"></div>
+    <button class="ghost" id="price-toggle" style="margin-top:8px; padding:5px 12px; font-size:0.8rem;">가격 직접 입력</button>
+    <div class="price-edit panel" id="price-edit">
+      <div class="row">
+        <span class="dim">입력 $/1M tok</span><input type="number" id="price-in" min="0" step="0.01" />
+        <span class="dim">출력 $/1M tok</span><input type="number" id="price-out" min="0" step="0.01" />
+        <button id="price-save">저장</button>
+        <button class="ghost" id="price-reset">초기화</button>
+      </div>
+      <div class="hint">이 브라우저에만 저장됩니다. 기본 등록가가 있는 모델도 덮어쓸 수 있습니다.</div>
+    </div>
+
+    <label for="input">텍스트 (프롬프트 / 캐릭터 설명 / 로어북 등)</label>
+    <textarea id="input" placeholder="여기에 붙여넣으면 자동으로 계산됩니다"></textarea>
+
+    <div class="stats">
+      <div class="stat"><div class="k">입력 토큰</div><div class="v" id="in-tokens">0</div></div>
+      <div class="stat"><div class="k">예상 출력 토큰</div><input type="number" id="out-tokens" value="500" min="0" /></div>
+      <div class="stat"><div class="k">총 토큰</div><div class="v" id="total-tokens">0</div></div>
+    </div>
+
+    <div class="panel" id="cost-panel" style="display:none">
+      <h3>예상 비용 <span class="dim" id="cost-basis"></span></h3>
+      <div class="row" style="margin-bottom:10px">
+        <label style="margin:0"><input type="checkbox" id="use-cache" /> 프롬프트 캐시 적용</label>
+        <select id="cache-ttl" style="display:none">
+          <option value="5m">TTL 5분</option>
+          <option value="1h">TTL 1시간</option>
+        </select>
+      </div>
+      <table id="cost-table"></table>
+      <div class="hint" id="cache-note" style="display:none">
+        캐시 적용 = 입력 전체가 캐시에서 읽힌다고 가정한 요청당 비용입니다. 첫 요청은 캐시 쓰기 비용(5분 1.25x / 1시간 2x)이 듭니다.
+      </div>
+    </div>
+    <div class="hint" id="no-price-msg" style="display:none">
+      이 모델은 가격이 등록되지 않아 토큰 수만 계산합니다. 위의 "가격 직접 입력"으로 요금을 넣으면 비용이 표시됩니다.
+    </div>
+
+    <div class="panel" id="exact-panel" style="display:none">
+      <h3>Claude 정확 측정 <span class="dim">(Anthropic 공식 count_tokens API · 무료)</span></h3>
+      <div class="row">
+        <input type="password" id="api-key" placeholder="sk-ant-... (이 브라우저에만 저장)" style="flex:1; min-width:220px" />
+        <button id="exact-btn">정확 측정</button>
+      </div>
+      <div class="hint" id="exact-result"></div>
+      <div class="hint">로컬 계산은 구세대(Claude 2) 토크나이저 기반 추정치라 실제 청구 토큰과 차이가 날 수 있습니다(특히 한국어). 이 버튼은 선택한 모델 기준의 정확한 값을 반환합니다.</div>
+    </div>
+
+    <details>
+      <summary>토큰 배열 보기 (<span id="tok-count">0</span>)</summary>
+      <div class="tokens-raw" id="tokens-raw"></div>
+    </details>
+
+    <div class="dim" id="time"></div>
+  </main>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
