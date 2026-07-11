@@ -7,11 +7,13 @@ import { tokenize } from './tokenizers.js'
 import { detectProfile, correctTokens } from './correction.js'
 
 export const TASK_TYPES = [
-  { id: 'simple',  label: '분류 · 요약 · 추출 · 포맷 변환', baseTier: 1 },
-  { id: 'general', label: '일반 대화 · 글쓰기 · 번역',        baseTier: 2 },
-  { id: 'coding',  label: '코딩 · 디버깅',                   baseTier: 2 },
-  { id: 'agent',   label: '고난도 추론 · 장기 에이전트 작업',  baseTier: 3 },
+  { id: 'simple',  label: '분류 · 요약 · 추출 · 포맷 변환', baseTier: 1, axis: 'reasoning' },
+  { id: 'general', label: '일반 대화 · 글쓰기 · 번역',        baseTier: 2, axis: 'writing' },
+  { id: 'coding',  label: '코딩 · 디버깅',                   baseTier: 2, axis: 'coding' },
+  { id: 'agent',   label: '고난도 추론 · 장기 에이전트 작업',  baseTier: 3, axis: 'agent' },
 ]
+
+export const AXIS_LABELS = { reasoning: '지식·추론', writing: '글쓰기', coding: '코딩', agent: '에이전트' }
 
 export const TOLERANCES = [
   { id: 'high',   label: '실수 허용 (검수하며 씀)',        tierDelta: -1 },
@@ -34,6 +36,9 @@ export function requiredTier(taskTypeId, toleranceId) {
  */
 export async function buildComparison(text, opts) {
   const needTier = requiredTier(opts.taskType, opts.tolerance)
+  // 승자독식 방지: 1차원 티어가 아니라 작업 유형에 해당하는 능력 축으로 적격성 판정
+  // (예: Gemini Pro는 지식·추론 3이지만 코딩·에이전트는 2 — 코딩 작업 티어3에선 부적격)
+  const axis = TASK_TYPES.find((t) => t.id === opts.taskType)?.axis ?? 'reasoning'
   const models = getModels()
 
   // 토크나이저별로 1회만 실측 (같은 어휘를 쓰는 모델은 공유)
@@ -61,7 +66,7 @@ export async function buildComparison(text, opts) {
       accuracy: corr?.accuracy ?? null,
       perRun,
       monthly: perRun ? perRun.totalCost * opts.runsPerMonth : null,
-      eligible: model.tier >= needTier && perRun !== null,
+      eligible: (model.strengths?.[axis] ?? model.tier) >= needTier && perRun !== null,
     }
   })
 
@@ -72,9 +77,9 @@ export async function buildComparison(text, opts) {
   // "습관적 최상위 선택" 기준점: 가격이 등록된 티어3 중 가장 비싼 것
   const topTierRow = [...rows].reverse().find((r) => r.model.tier === 3 && r.monthly != null) ?? null
 
-  const langAdvice = buildLangAdvice(recommended, rows, needTier, opts)
+  const langAdvice = buildLangAdvice(recommended, rows, needTier, axis, opts)
 
-  return { needTier, rows, recommended, topTierRow, langAdvice }
+  return { needTier, axis, rows, recommended, topTierRow, langAdvice }
 }
 
 export const LANG_LABELS = { ko: '한국어', en: '영어', zh: '중국어' }
@@ -84,7 +89,7 @@ export const LANG_LABELS = { ko: '한국어', en: '영어', zh: '중국어' }
  *  · understand(프롬프트 이해): 변환 허용 시 더 잘 이해하는 언어로 프롬프팅 권장 (우회 가능)
  *  · generate(출력 생성 품질): 결과물 언어의 품질 한계 — 변환으로 우회 불가, 대안 모델 병기
  */
-function buildLangAdvice(recommended, rows, needTier, opts) {
+function buildLangAdvice(recommended, rows, needTier, axis, opts) {
   const outLang = opts.outputLang ?? 'ko'
   const lang = recommended?.model.lang
   if (!lang) return null
@@ -107,7 +112,7 @@ function buildLangAdvice(recommended, rows, needTier, opts) {
   // ② 출력 품질: 결과물 언어 생성이 만점이 아니면, 만점 모델 중 최저가 대안 병기
   if ((lang.generate?.[outLang] ?? 0) < 3) {
     const alt = rows.find((r) =>
-      r.monthly != null && r.model.tier >= needTier &&
+      r.monthly != null && (r.model.strengths?.[axis] ?? r.model.tier) >= needTier &&
       r.model.lang?.generate?.[outLang] === 3 && r.model.id !== recommended.model.id)
     if (alt) {
       advice.qualityAlt = {
@@ -124,8 +129,9 @@ export function explain(result, opts) {
   if (!result.recommended) return '조건을 충족하는 가격 등록 모델이 없습니다.'
   const r = result.recommended
   const task = TASK_TYPES.find((t) => t.id === opts.taskType)?.label
-  let msg = `"${task}" 작업은 ${tierLabel(result.needTier)} 등급이면 충분합니다. ` +
-    `필요 등급을 충족하는 모델 중 실측 비용이 가장 낮은 **${r.model.name}** (${r.model.vendor})를 추천합니다.`
+  const axisLabel = AXIS_LABELS[result.axis] ?? result.axis
+  let msg = `"${task}" 작업은 ${axisLabel} 능력 ${tierLabel(result.needTier)} 등급이면 충분합니다. ` +
+    `${axisLabel} ${tierLabel(result.needTier)}+ 모델 중 실측 비용이 가장 낮은 **${r.model.name}** (${r.model.vendor})를 추천합니다.`
   if (result.topTierRow && result.topTierRow.model.id !== r.model.id && result.topTierRow.monthly > r.monthly) {
     const saved = result.topTierRow.monthly - r.monthly
     const ratio = result.topTierRow.monthly / r.monthly

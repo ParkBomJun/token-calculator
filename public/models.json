@@ -32,6 +32,12 @@
           "en": 3,
           "zh": 2
         }
+      },
+      "strengths": {
+        "reasoning": 3,
+        "coding": 3,
+        "writing": 3,
+        "agent": 3
       }
     },
     {
@@ -59,6 +65,12 @@
           "en": 3,
           "zh": 2
         }
+      },
+      "strengths": {
+        "reasoning": 3,
+        "coding": 3,
+        "writing": 3,
+        "agent": 3
       }
     },
     {
@@ -87,6 +99,12 @@
           "en": 3,
           "zh": 2
         }
+      },
+      "strengths": {
+        "reasoning": 3,
+        "coding": 3,
+        "writing": 3,
+        "agent": 3
       }
     },
     {
@@ -114,6 +132,12 @@
           "en": 3,
           "zh": 2
         }
+      },
+      "strengths": {
+        "reasoning": 2,
+        "coding": 2,
+        "writing": 2,
+        "agent": 2
       }
     },
     {
@@ -142,6 +166,12 @@
           "en": 3,
           "zh": 2
         }
+      },
+      "strengths": {
+        "reasoning": 3,
+        "coding": 2,
+        "writing": 3,
+        "agent": 2
       }
     },
     {
@@ -169,6 +199,12 @@
           "en": 3,
           "zh": 2
         }
+      },
+      "strengths": {
+        "reasoning": 2,
+        "coding": 2,
+        "writing": 3,
+        "agent": 2
       }
     },
     {
@@ -196,6 +232,12 @@
           "en": 3,
           "zh": 2
         }
+      },
+      "strengths": {
+        "reasoning": 2,
+        "coding": 2,
+        "writing": 2,
+        "agent": 1
       }
     },
     {
@@ -224,6 +266,12 @@
           "en": 3,
           "zh": 2
         }
+      },
+      "strengths": {
+        "reasoning": 3,
+        "coding": 2,
+        "writing": 2,
+        "agent": 2
       }
     },
     {
@@ -251,6 +299,12 @@
           "en": 3,
           "zh": 2
         }
+      },
+      "strengths": {
+        "reasoning": 2,
+        "coding": 2,
+        "writing": 2,
+        "agent": 1
       }
     },
     {
@@ -278,6 +332,12 @@
           "en": 3,
           "zh": 2
         }
+      },
+      "strengths": {
+        "reasoning": 1,
+        "coding": 1,
+        "writing": 1,
+        "agent": 1
       }
     },
     {
@@ -305,6 +365,12 @@
           "en": 3,
           "zh": 3
         }
+      },
+      "strengths": {
+        "reasoning": 3,
+        "coding": 2,
+        "writing": 2,
+        "agent": 2
       }
     },
     {
@@ -332,6 +398,12 @@
           "en": 3,
           "zh": 3
         }
+      },
+      "strengths": {
+        "reasoning": 2,
+        "coding": 2,
+        "writing": 1,
+        "agent": 1
       }
     },
     {
@@ -359,6 +431,12 @@
           "en": 3,
           "zh": 3
         }
+      },
+      "strengths": {
+        "reasoning": 2,
+        "coding": 2,
+        "writing": 2,
+        "agent": 2
       }
     },
     {
@@ -385,6 +463,12 @@
           "en": 3,
           "zh": 3
         }
+      },
+      "strengths": {
+        "reasoning": 2,
+        "coding": 2,
+        "writing": 2,
+        "agent": 2
       }
     },
     {
@@ -410,8 +494,15 @@
           "en": 3,
           "zh": 1
         }
+      },
+      "strengths": {
+        "reasoning": 1,
+        "coding": 1,
+        "writing": 1,
+        "agent": 1
       }
     }
   ],
-  "langNote": "언어 능력치(1~3)는 KMMLU·챗봇아레나 한국어 순위·커뮤니티 평가 기반 휴리스틱 (2026-07 조사). Claude/GPT 최상위=한국어 3, 중국계(DeepSeek/GLM)=중국어 3·한국어 2, Llama3=한국어 1. understand=프롬프트 지시 이해, generate=해당 언어 출력 품질. 이의 있으면 PR로 정정 환영."
+  "langNote": "언어 능력치(1~3)는 KMMLU·챗봇아레나 한국어 순위·커뮤니티 평가 기반 휴리스틱 (2026-07 조사). Claude/GPT 최상위=한국어 3, 중국계(DeepSeek/GLM)=중국어 3·한국어 2, Llama3=한국어 1. understand=프롬프트 지시 이해, generate=해당 언어 출력 품질. 이의 있으면 PR로 정정 환영.",
+  "strengthsNote": "능력 축(1~3)은 SWE-bench Pro(2026-07: Opus 최상위, GPT-5.6/GLM/DeepSeek 62~65% 준상위, Gemini Pro -15pt)·OSWorld·공개 리더보드 기반 휴리스틱. 3=구간 최상위, 2=준상위, 1=그 이하. 벤치마크 과최적화(소위 벤치딸) 방어: ① 오염 저항성 있는 소스 우선(SWE Pro=유출 방지 설계, 아레나=인간 선호 — Verified·객관식 단독 근거 배제) ② 점수를 3단계로 뭉개 소폭 조작 무력화 ③ 최종 판단은 A/B 블라인드 실측(예정) — 이 표는 실험 전 출발점. 이의는 PR로 정정 환영."
 }
