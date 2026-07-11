@@ -354,7 +354,49 @@
       }
     },
     "OpenRouter": {
-      "openai/gpt-5.6-luna": {},
+      "openai/gpt-5.6-luna": {
+        "ko-prose": {
+          "local": 180,
+          "exact": 186,
+          "ratio": 1,
+          "fixedOverhead": 6
+        },
+        "ko-instruction": {
+          "local": 132,
+          "exact": 138,
+          "ratio": 1,
+          "fixedOverhead": 6
+        },
+        "en-prose": {
+          "local": 97,
+          "exact": 103,
+          "ratio": 1,
+          "fixedOverhead": 6
+        },
+        "zh-prose": {
+          "local": 148,
+          "exact": 154,
+          "ratio": 1,
+          "fixedOverhead": 6
+        },
+        "code": {
+          "local": 116,
+          "exact": 122,
+          "ratio": 1,
+          "fixedOverhead": 6
+        },
+        "mixed": {
+          "local": 101,
+          "exact": 107,
+          "ratio": 1,
+          "fixedOverhead": 6
+        },
+        "_summary": {
+          "meanRatio": 1,
+          "spread": 0,
+          "samples": 6
+        }
+      },
       "z-ai/glm-5.2": {
         "ko-prose": {
           "local": 225,
@@ -438,6 +480,49 @@
         "_summary": {
           "meanRatio": 1.1679,
           "spread": 0.5905,
+          "samples": 6
+        }
+      },
+      "openai/gpt-5.4-nano": {
+        "ko-prose": {
+          "local": 180,
+          "exact": 186,
+          "ratio": 1,
+          "fixedOverhead": 6
+        },
+        "ko-instruction": {
+          "local": 132,
+          "exact": 138,
+          "ratio": 1,
+          "fixedOverhead": 6
+        },
+        "en-prose": {
+          "local": 97,
+          "exact": 103,
+          "ratio": 1,
+          "fixedOverhead": 6
+        },
+        "zh-prose": {
+          "local": 148,
+          "exact": 154,
+          "ratio": 1,
+          "fixedOverhead": 6
+        },
+        "code": {
+          "local": 116,
+          "exact": 122,
+          "ratio": 1,
+          "fixedOverhead": 6
+        },
+        "mixed": {
+          "local": 101,
+          "exact": 107,
+          "ratio": 1,
+          "fixedOverhead": 6
+        },
+        "_summary": {
+          "meanRatio": 1,
+          "spread": 0,
           "samples": 6
         }
       }

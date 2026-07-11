@@ -63,9 +63,10 @@ const MODEL_CALIB = {
   'glm-5.2':               { exact: true, measured: true }, // OpenRouter 경유 ×1.000 실측 (Claude 교차검증 통과)
   'glm-5':                 { exact: true, measured: false },
   'llama3-local':          { exact: true, measured: false },
-  'gpt-5.6-sol':           { approx: true },
-  'gpt-5.6-terra':         { approx: true },
-  'gpt-5.6-luna':          { approx: true },
+  // OpenRouter 경유 실측(교차검증 통과): luna·5.4-nano 모두 ×1.000 → 세대 전체 o200k 확정
+  'gpt-5.6-sol':           { exact: true, measured: true },
+  'gpt-5.6-terra':         { exact: true, measured: true },
+  'gpt-5.6-luna':          { exact: true, measured: true },
 }
 
 /**
