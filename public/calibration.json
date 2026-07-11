@@ -352,6 +352,95 @@
           "samples": 6
         }
       }
+    },
+    "OpenRouter": {
+      "openai/gpt-5.6-luna": {},
+      "z-ai/glm-5.2": {
+        "ko-prose": {
+          "local": 225,
+          "exact": 237,
+          "ratio": 1,
+          "fixedOverhead": 12
+        },
+        "ko-instruction": {
+          "local": 185,
+          "exact": 197,
+          "ratio": 1,
+          "fixedOverhead": 12
+        },
+        "en-prose": {
+          "local": 96,
+          "exact": 108,
+          "ratio": 1,
+          "fixedOverhead": 12
+        },
+        "zh-prose": {
+          "local": 103,
+          "exact": 115,
+          "ratio": 1,
+          "fixedOverhead": 12
+        },
+        "code": {
+          "local": 114,
+          "exact": 126,
+          "ratio": 1,
+          "fixedOverhead": 12
+        },
+        "mixed": {
+          "local": 119,
+          "exact": 131,
+          "ratio": 1,
+          "fixedOverhead": 12
+        },
+        "_summary": {
+          "meanRatio": 1,
+          "spread": 0,
+          "samples": 6
+        }
+      },
+      "anthropic/claude-sonnet-5": {
+        "ko-prose": {
+          "local": 310,
+          "exact": 302,
+          "ratio": 0.955,
+          "fixedOverhead": 6
+        },
+        "ko-instruction": {
+          "local": 239,
+          "exact": 236,
+          "ratio": 0.9625,
+          "fixedOverhead": 6
+        },
+        "en-prose": {
+          "local": 98,
+          "exact": 158,
+          "ratio": 1.5455,
+          "fixedOverhead": 7
+        },
+        "zh-prose": {
+          "local": 195,
+          "exact": 195,
+          "ratio": 0.9694,
+          "fixedOverhead": 6
+        },
+        "code": {
+          "local": 128,
+          "exact": 199,
+          "ratio": 1.5039,
+          "fixedOverhead": 7
+        },
+        "mixed": {
+          "local": 140,
+          "exact": 156,
+          "ratio": 1.0709,
+          "fixedOverhead": 6
+        },
+        "_summary": {
+          "meanRatio": 1.1679,
+          "spread": 0.5905,
+          "samples": 6
+        }
+      }
     }
   }
 }

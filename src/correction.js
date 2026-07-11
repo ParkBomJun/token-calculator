@@ -60,7 +60,7 @@ const MODEL_CALIB = {
   'gemini-3-1-flash-lite': { vendor: 'Google', model: 'gemini-3.1-flash-lite' },
   'deepseek-v4-pro':       { exact: true, measured: true },
   'deepseek-v4-flash':     { exact: true, measured: true },
-  'glm-5.2':               { exact: true, measured: false },
+  'glm-5.2':               { exact: true, measured: true }, // OpenRouter 경유 ×1.000 실측 (Claude 교차검증 통과)
   'glm-5':                 { exact: true, measured: false },
   'llama3-local':          { exact: true, measured: false },
   'gpt-5.6-sol':           { approx: true },
