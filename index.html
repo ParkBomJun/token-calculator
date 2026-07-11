@@ -72,8 +72,13 @@
       <div class="hint">이 브라우저에만 저장됩니다. 기본 등록가가 있는 모델도 덮어쓸 수 있습니다.</div>
     </div>
 
-    <label for="input">텍스트 (프롬프트 / 캐릭터 설명 / 로어북 등)</label>
-    <textarea id="input" placeholder="여기에 붙여넣으면 자동으로 계산됩니다"></textarea>
+    <label for="input">텍스트 (프롬프트 / 계획서 / 로어북 등)</label>
+    <div class="row" style="margin-bottom:6px">
+      <input type="file" id="file-input" accept=".txt,.md,.markdown" style="display:none" />
+      <button class="ghost" id="file-btn" style="padding:5px 12px; font-size:0.8rem;">📄 파일 불러오기 (.txt / .md)</button>
+      <span class="dim" id="file-name"></span>
+    </div>
+    <textarea id="input" placeholder="여기에 붙여넣거나 파일을 불러오면 자동으로 계산됩니다"></textarea>
 
     <div class="stats">
       <div class="stat"><div class="k">입력 토큰</div><div class="v" id="in-tokens">0</div></div>
@@ -107,6 +112,47 @@
       </div>
       <div class="hint" id="exact-result"></div>
       <div class="hint">로컬 계산은 구세대(Claude 2) 토크나이저 기반 추정치라 실제 청구 토큰과 차이가 날 수 있습니다(특히 한국어). 이 버튼은 선택한 모델 기준의 정확한 값을 반환합니다.</div>
+    </div>
+
+    <div class="panel" id="reco-panel">
+      <h3>모델 추천 <span class="dim">— 이 작업, 어떤 모델이면 충분한가</span></h3>
+      <div class="row" style="margin-bottom:8px">
+        <div>
+          <label style="margin:0 0 2px">작업 유형</label>
+          <select id="reco-task"></select>
+        </div>
+        <div>
+          <label style="margin:0 0 2px">오류 허용도</label>
+          <select id="reco-tol"></select>
+        </div>
+        <div>
+          <label style="margin:0 0 2px">월 실행 횟수</label>
+          <input type="number" id="reco-runs" value="100" min="1" style="width:100px" />
+        </div>
+        <div style="align-self:flex-end">
+          <button id="reco-btn">추천 받기</button>
+        </div>
+      </div>
+      <div class="hint">위 텍스트를 계획서/프롬프트로 보고, 모델마다 <b>자기 토크나이저로 실측한 토큰 수 × 공식 가격</b>으로 비교합니다. 예상 출력 토큰은 위의 값을 사용합니다.</div>
+      <div class="hint" id="reco-progress"></div>
+      <div id="reco-result" style="display:none">
+        <div class="panel" style="border-color:var(--green)" id="reco-verdict"></div>
+        <div style="overflow-x:auto">
+          <table id="reco-table" style="min-width:560px">
+            <thead>
+              <tr style="color:var(--dim); font-size:0.8rem; text-align:left">
+                <th style="text-align:left; padding:4px 0">모델</th><th>등급</th>
+                <th style="text-align:right">실측 입력 토큰</th>
+                <th style="text-align:right">요청당</th>
+                <th style="text-align:right">월 비용</th>
+                <th style="text-align:right">판정</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="hint">등급 산정과 가격은 <code>models.json</code>(확인일·출처 포함) 기준의 휴리스틱입니다. 등급이 "미달"인 모델도 검수를 전제로 쓸 수 있습니다.</div>
+      </div>
     </div>
 
     <details>

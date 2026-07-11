@@ -1,27 +1,35 @@
-// 토큰 비용 계산 모듈 — 토큰 "계산"(tokenizers.js)과 "비용"(이 파일)을 분리.
-// 가격 미등록 모델은 estimateCost()가 null을 반환 → UI는 토큰 수만 표시.
-// 사용자가 UI에서 직접 입력한 가격은 localStorage에 저장되어 기본값을 덮어쓴다.
+// 비용 계산 모듈 — 토큰 "계산"(tokenizers.js)과 "비용"(이 파일)을 분리.
+// 모델 카탈로그는 public/models.json에서 로드한다 (코드 수정 없이 데이터만 갱신 가능 — git이 곧 DB).
+// 가격 미등록(null) 모델은 estimateCost()가 null을 반환 → UI는 토큰 수만 표시.
+// 사용자가 UI에서 직접 입력한 가격은 localStorage에 저장되어 카탈로그 값을 덮어쓴다.
 
 const OVERRIDE_KEY = 'tokencalc_price_overrides'
 
-// Claude 가격: Anthropic 공식 요금표 (2026-06 확인, USD per 1M tokens)
-// 캐시 배율: 읽기 0.1x / 쓰기(5분) 1.25x / 쓰기(1시간) 2x
-export const MODELS = [
-  { id: 'claude-fable-5',   name: 'Claude Fable 5',   tokenizer: 'claude', input: 10, output: 50, verified: '2026-06', exactApi: 'anthropic' },
-  { id: 'claude-opus-4-8',  name: 'Claude Opus 4.8',  tokenizer: 'claude', input: 5,  output: 25, verified: '2026-06', exactApi: 'anthropic' },
-  { id: 'claude-sonnet-5',  name: 'Claude Sonnet 5',  tokenizer: 'claude', input: 3,  output: 15, verified: '2026-06', exactApi: 'anthropic' },
-  { id: 'claude-haiku-4-5', name: 'Claude Haiku 4.5', tokenizer: 'claude', input: 1,  output: 5,  verified: '2026-06', exactApi: 'anthropic' },
-  // 이하 가격 미등록(null) — UI에서 직접 입력 가능, 입력 전까지는 토큰 수만 계산
-  { id: 'gpt-o200k',   name: 'OpenAI GPT (o200k: 4o/o1/5)',  tokenizer: 'o200k',       input: null, output: null, verified: null },
-  { id: 'gpt-cl100k',  name: 'OpenAI GPT (cl100k: GPT-4)',   tokenizer: 'cl100k',      input: null, output: null, verified: null },
-  { id: 'deepseek-v4', name: 'DeepSeek V4',                  tokenizer: 'deepseek-v4', input: null, output: null, verified: null },
-  { id: 'deepseek',    name: 'DeepSeek (V2/V3)',             tokenizer: 'deepseek',    input: null, output: null, verified: null },
-  { id: 'glm5',        name: 'GLM 5',                        tokenizer: 'glm5',        input: null, output: null, verified: null },
-  { id: 'glm4',        name: 'GLM 4/4.5/4.6',                tokenizer: 'glm4',        input: null, output: null, verified: null },
-  { id: 'gemini',      name: 'Gemini (Gemma 토크나이저)',     tokenizer: 'gemma',       input: null, output: null, verified: null },
-  { id: 'llama3',      name: 'Llama 3 (로컬/자체호스팅)',      tokenizer: 'llama3',      input: null, output: null, verified: null },
-]
+let catalog = null
 
+/** models.json 로드 (1회). { updated, tierLabels, models } */
+export async function loadCatalog() {
+  if (!catalog) {
+    const res = await fetch('models.json')
+    if (!res.ok) throw new Error(`모델 카탈로그 로드 실패 (${res.status})`)
+    catalog = await res.json()
+  }
+  return catalog
+}
+
+export function getModels() {
+  return catalog?.models ?? []
+}
+
+export function getModel(id) {
+  return getModels().find((m) => m.id === id)
+}
+
+export function tierLabel(tier) {
+  return catalog?.tierLabels?.[String(tier)] ?? `T${tier}`
+}
+
+// ── 사용자 가격 오버라이드 ──
 export function loadOverrides() {
   try { return JSON.parse(localStorage.getItem(OVERRIDE_KEY)) ?? {} } catch { return {} }
 }
@@ -33,7 +41,7 @@ export function saveOverride(modelId, input, output) {
   localStorage.setItem(OVERRIDE_KEY, JSON.stringify(o))
 }
 
-/** 오버라이드가 반영된 유효 가격. 없으면 {input:null, output:null} */
+/** 오버라이드가 반영된 유효 가격 */
 export function effectivePricing(model) {
   const ov = loadOverrides()[model.id]
   return {
@@ -53,8 +61,11 @@ export function estimateCost(model, usage) {
   const p = effectivePricing(model)
   if (p.input == null || p.output == null) return null
 
-  const cacheReadRate = p.input * 0.1
-  const cacheWriteRate = usage.cacheWriteTTL === '1h' ? p.input * 2 : p.input * 1.25
+  // 캐시 요율: 카탈로그 명시값 우선, 없으면 관례(읽기 0.1x / Anthropic식 쓰기 1.25x·2x)로 추정
+  const cacheReadRate = model.cacheRead ?? p.input * 0.1
+  const cacheWriteRate = usage.cacheWriteTTL === '1h'
+    ? (model.cacheWrite1h ?? p.input * 2)
+    : (model.cacheWrite5m ?? p.input * 1.25)
 
   const inputCost = usage.inputTokens * perTok(p.input)
   const outputCost = (usage.outputTokens ?? 0) * perTok(p.output)
@@ -76,5 +87,6 @@ export function estimateCost(model, usage) {
 export function formatUSD(v) {
   if (v === 0) return '$0'
   if (v < 0.01) return '$' + v.toFixed(6).replace(/0+$/, '').replace(/\.$/, '')
-  return '$' + v.toFixed(4)
+  if (v < 100) return '$' + v.toFixed(4).replace(/0+$/, '').replace(/\.$/, '')
+  return '$' + v.toFixed(2)
 }

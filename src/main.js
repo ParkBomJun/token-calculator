@@ -1,5 +1,6 @@
-import { MODELS, estimateCost, effectivePricing, saveOverride, formatUSD } from './pricing.js'
+import { loadCatalog, getModels, getModel, estimateCost, effectivePricing, saveOverride, formatUSD, tierLabel } from './pricing.js'
 import { tokenize, countTokensExact } from './tokenizers.js'
+import { TASK_TYPES, TOLERANCES, buildComparison, explain } from './recommend.js'
 
 const $ = (id) => document.getElementById(id)
 const KEY_STORAGE = 'tokencalc_anthropic_key'
@@ -7,15 +8,45 @@ const KEY_STORAGE = 'tokencalc_anthropic_key'
 let currentTokens = []
 let lastTime = 0
 
-// ── 모델 셀렉트 구성 ──
-for (const m of MODELS) {
-  const opt = document.createElement('option')
-  opt.value = m.id
-  opt.textContent = m.name
-  $('model').appendChild(opt)
-}
+const selectedModel = () => getModel($('model').value)
 
-const selectedModel = () => MODELS.find((m) => m.id === $('model').value)
+// ── 초기화: 카탈로그 로드 후 UI 구성 ──
+async function init() {
+  await loadCatalog()
+
+  // 모델 셀렉트 (벤더별 그룹)
+  const byVendor = new Map()
+  for (const m of getModels()) {
+    if (!byVendor.has(m.vendor)) byVendor.set(m.vendor, [])
+    byVendor.get(m.vendor).push(m)
+  }
+  for (const [vendor, models] of byVendor) {
+    const group = document.createElement('optgroup')
+    group.label = vendor
+    for (const m of models) {
+      const opt = document.createElement('option')
+      opt.value = m.id
+      opt.textContent = m.name + (m.input == null ? ' (토큰 수만)' : '')
+      group.appendChild(opt)
+    }
+    $('model').appendChild(group)
+  }
+
+  // 추천 폼 셀렉트
+  for (const t of TASK_TYPES) {
+    const opt = document.createElement('option')
+    opt.value = t.id; opt.textContent = t.label
+    $('reco-task').appendChild(opt)
+  }
+  for (const t of TOLERANCES) {
+    const opt = document.createElement('option')
+    opt.value = t.id; opt.textContent = t.label
+    if (t.id === 'medium') opt.selected = true
+    $('reco-tol').appendChild(opt)
+  }
+
+  render()
+}
 
 // ── 계산 (디바운스) ──
 let timer
@@ -26,6 +57,7 @@ function scheduleRecalc() {
 
 async function recalc() {
   const model = selectedModel()
+  if (!model) return
   const text = $('input').value
   try {
     const start = performance.now()
@@ -43,6 +75,7 @@ async function recalc() {
 
 function render() {
   const model = selectedModel()
+  if (!model) return
   const inTok = currentTokens.length
   const outTok = Math.max(0, Number($('out-tokens').value) || 0)
 
@@ -55,8 +88,8 @@ function render() {
   const p = effectivePricing(model)
   if (p.input != null) {
     $('price-status').textContent =
-      `가격: 입력 $${p.input}/1M · 출력 $${p.output}/1M` +
-      (p.overridden ? ' (직접 입력값)' : model.verified ? ` (${model.verified} 공식 요금표)` : '')
+      `가격: 입력 $${p.input}/1M · 출력 $${p.output}/1M · ${tierLabel(model.tier)} 등급` +
+      (p.overridden ? ' (직접 입력값)' : model.verified ? ` (${model.verified} 확인)` : '')
   } else {
     $('price-status').textContent = '가격 미등록 — 토큰 수만 계산됩니다'
   }
@@ -93,9 +126,69 @@ function render() {
     $('cost-table').innerHTML = html
   }
 
-  // Claude 정확 측정 패널
-  $('exact-panel').style.display = model.exactApi === 'anthropic' ? '' : 'none'
+  // Claude 정확 측정 패널 (Anthropic 모델만)
+  $('exact-panel').style.display = model.vendor === 'Anthropic' ? '' : 'none'
 }
+
+// ── 파일 불러오기 ──
+$('file-btn').addEventListener('click', () => $('file-input').click())
+$('file-input').addEventListener('change', async (e) => {
+  const file = e.target.files?.[0]
+  if (!file) return
+  $('input').value = await file.text()
+  $('file-name').textContent = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`
+  recalc()
+})
+
+// ── 모델 추천 ──
+$('reco-btn').addEventListener('click', async () => {
+  const text = $('input').value
+  if (!text) {
+    $('reco-progress').innerHTML = '<span class="red">먼저 위에 계획서/텍스트를 입력하거나 파일을 불러오세요</span>'
+    return
+  }
+  $('reco-btn').disabled = true
+  $('reco-result').style.display = 'none'
+  try {
+    const opts = {
+      taskType: $('reco-task').value,
+      tolerance: $('reco-tol').value,
+      outputTokens: Math.max(0, Number($('out-tokens').value) || 0),
+      runsPerMonth: Math.max(1, Number($('reco-runs').value) || 1),
+      onProgress: (msg) => { $('reco-progress').textContent = msg },
+    }
+    const result = await buildComparison(text, opts)
+    $('reco-progress').textContent = ''
+
+    // 추천 문구
+    $('reco-verdict').innerHTML = explain(result, opts).replace(/\*\*(.+?)\*\*/g, '<b class="green">$1</b>')
+
+    // 비교표
+    const tbody = $('reco-table').querySelector('tbody')
+    tbody.innerHTML = result.rows.map((r) => {
+      const isReco = r.model.id === result.recommended?.model.id
+      const verdict = isReco ? '<b class="green">✓ 추천</b>'
+        : r.tokens == null ? '<span class="red">실측 실패</span>'
+        : r.perRun === null ? '<span class="dim">가격 없음</span>'
+        : r.eligible ? '충족'
+        : '<span class="dim">등급 미달</span>'
+      const style = isReco ? ' style="color:var(--green); font-weight:700"' : ''
+      return `<tr${style}>
+        <td style="text-align:left">${r.model.name}<span class="dim" style="font-size:0.75rem"> ${r.model.vendor}</span></td>
+        <td>${tierLabel(r.model.tier)}</td>
+        <td style="text-align:right">${r.tokens != null ? r.tokens.toLocaleString() : '—'}</td>
+        <td style="text-align:right">${r.perRun ? formatUSD(r.perRun.totalCost) : '—'}</td>
+        <td style="text-align:right">${r.monthly != null ? formatUSD(r.monthly) : '—'}</td>
+        <td style="text-align:right">${verdict}</td>
+      </tr>`
+    }).join('')
+    $('reco-result').style.display = ''
+  } catch (e) {
+    $('reco-progress').innerHTML = `<span class="red">오류: ${e.message}</span>`
+  } finally {
+    $('reco-btn').disabled = false
+  }
+})
 
 // ── 가격 직접 입력 ──
 $('price-toggle').addEventListener('click', () => {
@@ -152,4 +245,4 @@ $('out-tokens').addEventListener('input', render)
 $('use-cache').addEventListener('change', render)
 $('cache-ttl').addEventListener('change', render)
 
-render()
+init().catch((e) => { $('time').textContent = `초기화 오류: ${e.message}` })

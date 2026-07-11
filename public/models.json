@@ -1,0 +1,107 @@
+{
+  "updated": "2026-07-12",
+  "tierLabels": { "1": "경량", "2": "중급", "3": "최상위" },
+  "models": [
+    {
+      "id": "claude-fable-5", "name": "Claude Fable 5", "vendor": "Anthropic",
+      "tokenizer": "claude", "tier": 3, "input": 10, "output": 50,
+      "cacheRead": 1, "cacheWrite5m": 12.5, "cacheWrite1h": 20,
+      "contextK": 1000, "verified": "2026-06", "source": "https://platform.claude.com/docs/en/pricing",
+      "note": "최고 난도 추론·장기 에이전트 특화. 일반 작업엔 과투자"
+    },
+    {
+      "id": "claude-opus-4-8", "name": "Claude Opus 4.8", "vendor": "Anthropic",
+      "tokenizer": "claude", "tier": 3, "input": 5, "output": 25,
+      "cacheRead": 0.5, "cacheWrite5m": 6.25, "cacheWrite1h": 10,
+      "contextK": 1000, "verified": "2026-06", "source": "https://platform.claude.com/docs/en/pricing"
+    },
+    {
+      "id": "claude-sonnet-5", "name": "Claude Sonnet 5", "vendor": "Anthropic",
+      "tokenizer": "claude", "tier": 2, "input": 3, "output": 15,
+      "cacheRead": 0.3, "cacheWrite5m": 3.75, "cacheWrite1h": 6,
+      "contextK": 1000, "verified": "2026-06", "source": "https://platform.claude.com/docs/en/pricing",
+      "note": "코딩·에이전트에서 준(準)Opus급"
+    },
+    {
+      "id": "claude-haiku-4-5", "name": "Claude Haiku 4.5", "vendor": "Anthropic",
+      "tokenizer": "claude", "tier": 1, "input": 1, "output": 5,
+      "cacheRead": 0.1, "cacheWrite5m": 1.25, "cacheWrite1h": 2,
+      "contextK": 200, "verified": "2026-06", "source": "https://platform.claude.com/docs/en/pricing"
+    },
+
+    {
+      "id": "gpt-5.6-sol", "name": "GPT-5.6 Sol", "vendor": "OpenAI",
+      "tokenizer": "o200k", "tier": 3, "input": 5, "output": 30,
+      "cacheRead": 0.5, "cacheWrite5m": 0, "cacheWrite1h": 0,
+      "contextK": 400, "verified": "2026-07", "source": "https://developers.openai.com/api/docs/pricing",
+      "note": "토크나이저는 o200k 근사(5.6 세대 공식 미공개). 캐시 쓰기 무료(자동)"
+    },
+    {
+      "id": "gpt-5.6-terra", "name": "GPT-5.6 Terra", "vendor": "OpenAI",
+      "tokenizer": "o200k", "tier": 2, "input": 2.5, "output": 15,
+      "cacheRead": 0.25, "cacheWrite5m": 0, "cacheWrite1h": 0,
+      "contextK": 400, "verified": "2026-07", "source": "https://developers.openai.com/api/docs/pricing"
+    },
+    {
+      "id": "gpt-5.6-luna", "name": "GPT-5.6 Luna", "vendor": "OpenAI",
+      "tokenizer": "o200k", "tier": 1, "input": 1, "output": 6,
+      "cacheRead": 0.1, "cacheWrite5m": 0, "cacheWrite1h": 0,
+      "contextK": 400, "verified": "2026-07", "source": "https://developers.openai.com/api/docs/pricing"
+    },
+
+    {
+      "id": "gemini-3-pro", "name": "Gemini 3 Pro", "vendor": "Google",
+      "tokenizer": "gemma", "tier": 3, "input": 2, "output": 12,
+      "cacheRead": 0.2, "cacheWrite5m": 0, "cacheWrite1h": 0,
+      "contextK": 1000, "verified": "2026-07", "source": "https://ai.google.dev/gemini-api/docs/pricing",
+      "note": "≤200K 컨텍스트 구간 가격. 초과 시 $4/$18. 토크나이저는 Gemma 근사. 캐시는 별도 저장료 있음(미반영)"
+    },
+    {
+      "id": "gemini-3-5-flash", "name": "Gemini 3.5 Flash", "vendor": "Google",
+      "tokenizer": "gemma", "tier": 2, "input": 1.5, "output": 9,
+      "cacheRead": 0.15, "cacheWrite5m": 0, "cacheWrite1h": 0,
+      "contextK": 1000, "verified": "2026-07", "source": "https://ai.google.dev/gemini-api/docs/pricing"
+    },
+    {
+      "id": "gemini-3-1-flash-lite", "name": "Gemini 3.1 Flash-Lite", "vendor": "Google",
+      "tokenizer": "gemma", "tier": 1, "input": 0.25, "output": 1.5,
+      "cacheRead": 0.025, "cacheWrite5m": 0, "cacheWrite1h": 0,
+      "contextK": 1000, "verified": "2026-07", "source": "https://ai.google.dev/gemini-api/docs/pricing"
+    },
+
+    {
+      "id": "deepseek-v4-pro", "name": "DeepSeek V4 Pro", "vendor": "DeepSeek",
+      "tokenizer": "deepseek-v4", "tier": 2, "input": 0.435, "output": 0.87,
+      "cacheWrite5m": 0, "cacheWrite1h": 0,
+      "contextK": 1000, "verified": "2026-07", "source": "https://api-docs.deepseek.com/quick_start/pricing",
+      "note": "캐시 읽기 요율은 공식 표기 확인 필요(기본 0.1x로 추정 계산)"
+    },
+    {
+      "id": "deepseek-v4-flash", "name": "DeepSeek V4 Flash", "vendor": "DeepSeek",
+      "tokenizer": "deepseek-v4", "tier": 1, "input": 0.14, "output": 0.28,
+      "cacheWrite5m": 0, "cacheWrite1h": 0,
+      "contextK": 1000, "verified": "2026-07", "source": "https://api-docs.deepseek.com/quick_start/pricing",
+      "note": "thinking 모드 지원으로 가성비 높음. 경량 작업 최저가권"
+    },
+
+    {
+      "id": "glm-5.2", "name": "GLM-5.2", "vendor": "Zhipu (Z.ai)",
+      "tokenizer": "glm5", "tier": 2, "input": 1.4, "output": 4.4,
+      "cacheRead": 0.26, "cacheWrite5m": 0, "cacheWrite1h": 0,
+      "contextK": 200, "verified": "2026-07", "source": "https://docs.z.ai/guides/overview/pricing"
+    },
+    {
+      "id": "glm-5", "name": "GLM-5", "vendor": "Zhipu (Z.ai)",
+      "tokenizer": "glm5", "tier": 2, "input": 0.6, "output": 1.92,
+      "cacheWrite5m": 0, "cacheWrite1h": 0,
+      "contextK": 200, "verified": "2026-07", "source": "https://docs.z.ai/guides/overview/pricing"
+    },
+
+    {
+      "id": "llama3-local", "name": "Llama 3 (로컬/자체호스팅)", "vendor": "Meta",
+      "tokenizer": "llama3", "tier": 1, "input": null, "output": null,
+      "contextK": 128, "verified": null, "source": null,
+      "note": "API 요금 없음(자체 호스팅) — 토큰 수만 계산"
+    }
+  ]
+}
