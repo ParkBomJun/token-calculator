@@ -215,13 +215,19 @@ $('price-reset').addEventListener('click', () => {
 })
 
 // ── Claude 정확 측정 ──
-$('api-key').value = localStorage.getItem(KEY_STORAGE) ?? ''
+// 키 저장은 옵트인: 체크 시에만 localStorage, 기본은 메모리(탭 닫으면 소멸)
+const savedKey = localStorage.getItem(KEY_STORAGE)
+if (savedKey) { $('api-key').value = savedKey; $('key-save').checked = true }
+$('key-save').addEventListener('change', () => {
+  if (!$('key-save').checked) localStorage.removeItem(KEY_STORAGE)
+  else if ($('api-key').value.trim()) localStorage.setItem(KEY_STORAGE, $('api-key').value.trim())
+})
 $('exact-btn').addEventListener('click', async () => {
   const key = $('api-key').value.trim()
   const text = $('input').value
   if (!key) { $('exact-result').innerHTML = '<span class="red">API 키를 입력하세요</span>'; return }
   if (!text) { $('exact-result').innerHTML = '<span class="red">먼저 텍스트를 입력하세요</span>'; return }
-  localStorage.setItem(KEY_STORAGE, key)
+  if ($('key-save').checked) localStorage.setItem(KEY_STORAGE, key)
   $('exact-btn').disabled = true
   $('exact-result').textContent = '측정 중...'
   try {

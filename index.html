@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- 보안: 통신 가능 도메인을 화이트리스트. 악성 코드가 끼어들어도 API 키를 외부로 보낼 곳이 없다.
+       'wasm-unsafe-eval'은 토크나이저 WASM 실행용, unsafe-inline(style)은 인라인 스타일용. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.anthropic.com; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'" />
   <title>토큰 계산기</title>
   <style>
     :root {
@@ -107,9 +110,10 @@
     <div class="panel" id="exact-panel" style="display:none">
       <h3>Claude 정확 측정 <span class="dim">(Anthropic 공식 count_tokens API · 무료)</span></h3>
       <div class="row">
-        <input type="password" id="api-key" placeholder="sk-ant-... (이 브라우저에만 저장)" style="flex:1; min-width:220px" />
+        <input type="password" id="api-key" placeholder="sk-ant-... (내 브라우저 → Anthropic 직행, 외부 전송 없음)" style="flex:1; min-width:220px" />
         <button id="exact-btn">정확 측정</button>
       </div>
+      <label style="margin:6px 0 0"><input type="checkbox" id="key-save" /> 이 브라우저에 키 저장 (공용 PC에서는 끄세요)</label>
       <div class="hint" id="exact-result"></div>
       <div class="hint">로컬 계산은 구세대(Claude 2) 토크나이저 기반 추정치라 실제 청구 토큰과 차이가 날 수 있습니다(특히 한국어). 이 버튼은 선택한 모델 기준의 정확한 값을 반환합니다.</div>
     </div>
