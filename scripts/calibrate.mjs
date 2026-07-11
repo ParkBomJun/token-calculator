@@ -1,13 +1,16 @@
-// 로컬 Claude 토크나이저(구세대 claude.json) vs 공식 count_tokens API 편차 측정 스크립트
+// 멀티 벤더 토크나이저 캘리브레이션 스크립트
+// 로컬 어휘 파일 추정치 vs 각 벤더 공식 API 실측치의 배율(보정계수)을 측정한다.
 //
-// 목적: 언어·유형별 보정계수를 한 번 측정해 models.json에 내장하면,
-//       일반 사용자는 API 키 없이 "보정된 추정치"를 받을 수 있다.
+// 사용법 (가진 키만 넣으면 됨 — 없는 벤더는 자동 스킵):
+//   ANTHROPIC_API_KEY=... GEMINI_API_KEY=... DEEPSEEK_API_KEY=... \
+//   GLM_API_KEY=... OPENAI_API_KEY=... node scripts/calibrate.mjs
 //
-// 사용법:
-//   ANTHROPIC_API_KEY=sk-ant-... node scripts/calibrate.mjs
+// 비용: Anthropic·Google은 무료 카운트 API. DeepSeek·GLM·OpenAI는 초소형 실호출
+//       (벤더당 1~2센트 미만, usage 필드만 읽고 출력은 8토큰으로 제한)
 //
-// 비용: count_tokens는 무료 엔드포인트 (과금 없음, 레이트리밋만 존재)
-// 결과: scripts/calibration-result.json + 콘솔 요약표
+// 정확도 장치 — 델타 측정법:
+//   API 실측치에는 메시지 포장 오버헤드(고정 토큰)가 포함된다. 같은 텍스트를
+//   1배/2배로 두 번 재서 (실측2−실측1)/(로컬2−로컬1)로 배율을 구하면 고정분이 상쇄된다.
 
 import { readFile, writeFile, copyFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
@@ -16,17 +19,9 @@ import { dirname, join } from 'node:path'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-const API_KEY = process.env.ANTHROPIC_API_KEY
-if (!API_KEY) {
-  console.error('사용법: ANTHROPIC_API_KEY=sk-ant-... node scripts/calibrate.mjs')
-  process.exit(1)
-}
-
-// 보정 대상 Claude 모델 (토크나이저 세대가 달라 모델별로 편차가 다름)
-const MODELS = ['claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4-5']
-
-// 유형별 샘플 — 실사용 분포를 흉내 낸다 (각 300자 이상, 짧으면 비율이 불안정)
+// ── 샘플 (유형별, 각 300자+) ──
 const SAMPLES = {
   'ko-prose': '고블린 동굴 깊은 곳, 횃불이 만들어내는 그림자가 벽면을 따라 일렁였다. 모험가 일행은 좁은 통로를 지나 마침내 넓은 공동에 도착했고, 그곳에는 오래된 제단과 함께 알 수 없는 문자가 새겨진 석판이 놓여 있었다. 리더는 조심스럽게 석판에 손을 얹었다. 차가운 감촉과 함께 희미한 빛이 문자를 따라 흐르기 시작했다. 뒤에 서 있던 마법사가 낮은 목소리로 경고했다. 이것은 봉인이다. 함부로 건드리면 안 된다. 하지만 이미 늦었다. 석판의 빛은 점점 강해졌고, 공동 전체가 진동하기 시작했다.',
   'ko-instruction': '당신은 고객 상담 어시스턴트입니다. 다음 규칙을 반드시 지키세요. 첫째, 근거 문서에 없는 내용은 절대 답변하지 마세요. 둘째, 환불이나 결제 취소 요청은 즉시 상담사에게 이관하세요. 셋째, 답변은 세 문장 이내로 간결하게 작성하되 정중한 존댓말을 유지하세요. 넷째, 고객이 화를 내거나 부정적인 감정을 표현하면 공감 표현을 먼저 하고 해결책을 제시하세요. 다섯째, 개인정보를 요구하지 마세요.',
@@ -35,62 +30,137 @@ const SAMPLES = {
   'code': 'export async function buildComparison(text, opts) {\n  const needTier = requiredTier(opts.taskType, opts.tolerance)\n  const models = getModels()\n  const tokenCounts = new Map()\n  for (const tk of [...new Set(models.map((m) => m.tokenizer))]) {\n    try { tokenCounts.set(tk, (await tokenize(text, tk)).length) }\n    catch { tokenCounts.set(tk, null) }\n  }\n  return models.map((model) => ({ model, tokens: tokenCounts.get(model.tokenizer) }))\n}',
   'mixed': '프로젝트 마감은 7/25(금)입니다. API 응답의 p95 latency가 3.5s를 초과하면 rollback 하세요. 담당: 김민수(minsu.kim@example.com), Slack #proj-alpha 채널. 예산: $12,400 (약 1,700만 원). 진행률 78% 🚀 남은 태스크: DB 마이그레이션, i18n 적용, QA 2 라운드.',
 }
+const doubled = (t) => t + '\n' + t
 
-// ── 로컬 토크나이저 로드 (web-tokenizers UMD → CJS 우회) ──
-async function loadLocalClaude() {
+// ── 로컬 토크나이저 ──
+async function loadWT() {
   const src = join(ROOT, 'node_modules/@mlc-ai/web-tokenizers/lib/index.js')
   const tmp = join(ROOT, 'scripts/.wt-tmp.cjs')
   await copyFile(src, tmp)
-  const require = createRequire(import.meta.url)
-  const { Tokenizer } = require(tmp)
-  const buf = await readFile(join(ROOT, 'public/token/claude/claude.json'))
-  return Tokenizer.fromJSON(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength))
+  return createRequire(import.meta.url)(tmp).Tokenizer
 }
-
-async function countExact(text, model) {
-  const res = await fetch('https://api.anthropic.com/v1/messages/count_tokens', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({ model, messages: [{ role: 'user', content: text }] }),
-  })
-  if (!res.ok) throw new Error(`${model}: ${res.status} ${(await res.text()).slice(0, 200)}`)
-  return (await res.json()).input_tokens
-}
-
-const local = await loadLocalClaude()
-const result = { measuredAt: new Date().toISOString().slice(0, 10), note: 'ratio = 공식 count_tokens / 로컬 claude.json 추정. 로컬값 × ratio = 보정 추정치', models: {} }
-
-for (const model of MODELS) {
-  result.models[model] = {}
-  console.log(`\n■ ${model}`)
-  for (const [name, text] of Object.entries(SAMPLES)) {
-    const localCount = local.encode(text).length
-    let exact
-    try {
-      exact = await countExact(text, model)
-    } catch (e) {
-      console.log(`  ${name.padEnd(16)} 실패: ${e.message}`)
-      continue
-    }
-    const ratio = exact / localCount
-    result.models[model][name] = { local: localCount, exact, ratio: Number(ratio.toFixed(4)) }
-    console.log(`  ${name.padEnd(16)} 로컬 ${String(localCount).padStart(5)} → 공식 ${String(exact).padStart(5)}  (×${ratio.toFixed(3)})`)
-    await new Promise((r) => setTimeout(r, 300)) // 레이트리밋 예방
+async function buildLocals() {
+  const Tokenizer = await loadWT()
+  const buf = async (p) => {
+    const b = await readFile(join(ROOT, 'public/token', p))
+    return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)
   }
-  const ratios = Object.values(result.models[model]).map((v) => v.ratio)
-  if (ratios.length) {
-    const mean = ratios.reduce((a, b) => a + b, 0) / ratios.length
-    const spread = Math.max(...ratios) - Math.min(...ratios)
-    result.models[model]._summary = { meanRatio: Number(mean.toFixed(4)), spread: Number(spread.toFixed(4)) }
-    console.log(`  → 평균 ×${mean.toFixed(3)}, 유형 간 편차폭 ${spread.toFixed(3)} (편차폭이 크면 언어별 보정 필요)`)
+  const { encode: o200k } = await import('gpt-tokenizer/encoding/o200k_base')
+  return {
+    claude: await Tokenizer.fromJSON(await buf('claude/claude.json')),
+    gemma: await Tokenizer.fromSentencePiece(await buf('gemma/tokenizer.model')),
+    'deepseek-v4': await Tokenizer.fromJSON(await buf('deepseek/v4/tokenizer.json')),
+    glm5: await Tokenizer.fromJSON(await buf('glm5/tokenizer.json')),
+    o200k: { encode: (t) => o200k(t) },
+  }
+}
+
+// ── 벤더별 실측 함수 (text → 공식 입력 토큰 수) ──
+async function post(url, headers, body) {
+  const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${JSON.stringify(json).slice(0, 200)}`)
+  return json
+}
+
+const VENDORS = [
+  {
+    name: 'Anthropic', env: 'ANTHROPIC_API_KEY', local: 'claude', free: true,
+    models: ['claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4-5'],
+    count: async (text, model, key) =>
+      (await post('https://api.anthropic.com/v1/messages/count_tokens',
+        { 'x-api-key': key, 'anthropic-version': '2023-06-01' },
+        { model, messages: [{ role: 'user', content: text }] })).input_tokens,
+  },
+  {
+    name: 'Google', env: 'GEMINI_API_KEY', local: 'gemma', free: true,
+    models: ['gemini-3-pro', 'gemini-3.5-flash', 'gemini-3.1-flash-lite'],
+    count: async (text, model, key) =>
+      (await post(`https://generativelanguage.googleapis.com/v1beta/models/${model}:countTokens?key=${key}`,
+        {}, { contents: [{ parts: [{ text }] }] })).totalTokens,
+    onModelError: async (key) => {
+      // 모델 ID가 다르면 실제 목록을 보여준다
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`)
+      const json = await res.json().catch(() => ({}))
+      const names = (json.models ?? []).map((m) => m.name?.replace('models/', '')).filter((n) => n?.startsWith('gemini'))
+      console.log('  사용 가능한 Gemini 모델 ID:', names.slice(0, 15).join(', '))
+    },
+  },
+  {
+    name: 'DeepSeek', env: 'DEEPSEEK_API_KEY', local: 'deepseek-v4', free: false,
+    models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
+    count: async (text, model, key) =>
+      (await post('https://api.deepseek.com/chat/completions',
+        { authorization: `Bearer ${key}` },
+        { model, messages: [{ role: 'user', content: text }], max_tokens: 8 })).usage.prompt_tokens,
+  },
+  {
+    name: 'Zhipu(GLM)', env: 'GLM_API_KEY', local: 'glm5', free: false,
+    models: ['glm-5.2', 'glm-5'],
+    count: async (text, model, key) =>
+      (await post('https://open.bigmodel.cn/api/paas/v4/chat/completions',
+        { authorization: `Bearer ${key}` },
+        { model, messages: [{ role: 'user', content: text }], max_tokens: 8 })).usage.prompt_tokens,
+  },
+  {
+    name: 'OpenAI', env: 'OPENAI_API_KEY', local: 'o200k', free: false,
+    models: ['gpt-5.6-luna'], // 같은 세대는 토크나이저 공유 가정 — luna(최저가)로 대표 측정
+    count: async (text, model, key) =>
+      (await post('https://api.openai.com/v1/chat/completions',
+        { authorization: `Bearer ${key}` },
+        { model, messages: [{ role: 'user', content: text }], max_completion_tokens: 8 })).usage.prompt_tokens,
+  },
+]
+
+// ── 실행 ──
+const locals = await buildLocals()
+const result = {
+  measuredAt: new Date().toISOString().slice(0, 10),
+  method: 'delta: ratio = (exact(2x)-exact(1x)) / (local(2x)-local(1x)) — 메시지 고정 오버헤드 상쇄',
+  vendors: {},
+}
+
+for (const v of VENDORS) {
+  const key = process.env[v.env]
+  if (!key) { console.log(`\n○ ${v.name}: ${v.env} 없음 → 스킵`); continue }
+  console.log(`\n■ ${v.name} ${v.free ? '(무료)' : '(초소액 과금)'}`)
+  result.vendors[v.name] = {}
+
+  for (const model of v.models) {
+    const entry = {}
+    console.log(`  [${model}]`)
+    let failed = false
+    for (const [name, text] of Object.entries(SAMPLES)) {
+      const l1 = locals[v.local].encode(text).length
+      const l2 = locals[v.local].encode(doubled(text)).length
+      try {
+        const e1 = await v.count(text, model, key)
+        await sleep(250)
+        const e2 = await v.count(doubled(text), model, key)
+        await sleep(250)
+        const ratio = (e2 - e1) / (l2 - l1)
+        const overhead = e1 - Math.round(l1 * ratio)
+        entry[name] = { local: l1, exact: e1, ratio: Number(ratio.toFixed(4)), fixedOverhead: overhead }
+        console.log(`    ${name.padEnd(15)} 로컬 ${String(l1).padStart(5)} → 공식 ${String(e1).padStart(5)}  배율 ×${ratio.toFixed(3)}  고정분 ${overhead >= 0 ? '+' : ''}${overhead}`)
+      } catch (e) {
+        console.log(`    ${name.padEnd(15)} 실패: ${e.message}`)
+        failed = true
+        break // 모델 ID 오류면 나머지 샘플도 실패하므로 중단
+      }
+    }
+    const ratios = Object.values(entry).map((x) => x.ratio)
+    if (ratios.length) {
+      const mean = ratios.reduce((a, b) => a + b, 0) / ratios.length
+      const spread = Math.max(...ratios) - Math.min(...ratios)
+      entry._summary = { meanRatio: Number(mean.toFixed(4)), spread: Number(spread.toFixed(4)), samples: ratios.length }
+      console.log(`    → 평균 ×${mean.toFixed(3)} · 유형 간 편차폭 ${spread.toFixed(3)} ${spread < 0.05 ? '(균일 — 단일 계수로 충분)' : '(언어별 계수 필요)'}`)
+    }
+    result.vendors[v.name][model] = entry
+    if (failed && v.onModelError) await v.onModelError(key)
   }
 }
 
 const out = join(ROOT, 'scripts/calibration-result.json')
 await writeFile(out, JSON.stringify(result, null, 2))
 console.log(`\n저장됨: ${out}`)
-console.log('다음 단계: 이 파일을 커밋하면, UI가 언어를 감지해 보정된 추정치를 표시하도록 연결한다.')
+console.log('다음 단계: git add scripts/calibration-result.json → 커밋·푸시하면 UI 연동 작업을 진행합니다.')
