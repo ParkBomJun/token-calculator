@@ -156,13 +156,16 @@ const VENDORS = [
     // OpenRouter가 네이티브 토큰 수를 전달하는지(자체 정규화 여부)를 여기서 판별한다.
     models: [
       { id: 'openai/gpt-5.6-luna', local: 'o200k' },
+      { id: 'openai/gpt-5.4-nano', local: 'o200k' }, // 5.6 실패 대비 세대 대조용 (최저가)
       { id: 'z-ai/glm-5.2', local: 'glm5' },
       { id: 'anthropic/claude-sonnet-5', local: 'claude' },
     ],
+    // max_tokens 128: 추론(thinking) 계열 모델이 너무 작은 출력 예산을 거부하는 것 방지.
+    // usage.prompt_tokens는 출력 길이와 무관하므로 측정에는 영향 없음.
     count: async (text, model, key) =>
       (await post('https://openrouter.ai/api/v1/chat/completions',
         { authorization: `Bearer ${key}` },
-        { model, messages: [{ role: 'user', content: text }], max_tokens: 8, usage: { include: true } })).usage.prompt_tokens,
+        { model, messages: [{ role: 'user', content: text }], max_tokens: 128, usage: { include: true } })).usage.prompt_tokens,
     onModelError: async (key) => {
       const res = await fetch('https://openrouter.ai/api/v1/models', { headers: { authorization: `Bearer ${key}` } })
       const json = await res.json().catch(() => ({}))
@@ -201,6 +204,7 @@ async function measureVendor(v, key, locals) {
       } catch (e) {
         console.log(`    ${name.padEnd(15)} 실패: ${e.message}`)
         if (e.status === 401 || e.status === 403) throw e // 키 문제 → 상위에서 재입력 처리
+        entry._error = `${name}: ${e.message}` // 실패 원인을 결과 파일에 보존 (원격 진단용)
         if (v.onModelError) await v.onModelError(key)
         break // 모델 ID 문제 → 다음 모델로
       }
@@ -220,10 +224,15 @@ async function measureVendor(v, key, locals) {
 async function saveMerged(result) {
   let existing = {}
   try { existing = JSON.parse(await readFile(OUT, 'utf8')) } catch {}
+  // 벤더 통째 교체가 아니라 모델 단위 병합 — 재실행 시 기존 측정치 보존
+  const vendors = { ...(existing.vendors ?? {}) }
+  for (const [vname, models] of Object.entries(result)) {
+    vendors[vname] = { ...(vendors[vname] ?? {}), ...models }
+  }
   const merged = {
     measuredAt: new Date().toISOString().slice(0, 10),
     method: 'delta: ratio = (exact(2x)-exact(1x)) / (local(2x)-local(1x))',
-    vendors: { ...(existing.vendors ?? {}), ...result },
+    vendors,
   }
   await writeFile(OUT, JSON.stringify(merged, null, 2))
   return merged
