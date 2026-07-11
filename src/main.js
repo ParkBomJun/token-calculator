@@ -1,7 +1,8 @@
 import { loadCatalog, getModels, getModel, estimateCost, effectivePricing, saveOverride, formatUSD, tierLabel } from './pricing.js'
 import { tokenize, countTokensExact } from './tokenizers.js'
-import { TASK_TYPES, TOLERANCES, buildComparison, explain } from './recommend.js'
+import { TASK_TYPES, TOLERANCES, buildComparison, explain, LANG_LABELS } from './recommend.js'
 import { loadCalibration, detectProfile, correctTokens } from './correction.js'
+import { buildKeylessPrompt, convertViaAnthropic, CONVERT_MODEL } from './convert.js'
 
 const $ = (id) => document.getElementById(id)
 const KEY_STORAGE = 'tokencalc_anthropic_key'
@@ -177,6 +178,8 @@ $('reco-btn').addEventListener('click', async () => {
     }
     const result = await buildComparison(text, opts)
     $('reco-progress').textContent = ''
+    lastReco = { result, opts, text }
+    renderConverter(result, opts)
 
     // 추천 문구 + 언어 축 조언
     let verdictHtml = explain(result, opts).replace(/\*\*(.+?)\*\*/g, '<b class="green">$1</b>')
@@ -218,6 +221,115 @@ $('reco-btn').addEventListener('click', async () => {
   }
 })
 
+// ── 프롬프트 언어 변환기 ──
+// 추천 결과에 "권장 프롬프팅 언어" 조언이 있고 변환 허용이 켜진 경우에만 표시된다.
+let lastReco = null      // { result, opts, text } — 변환·측정의 기준
+let lastConvCost = null  // 모드 ②(Haiku) 변환 비용 (모드 ①은 0)
+
+function convTargetLang() {
+  return $('conv-lang-row').style.display !== 'none'
+    ? $('conv-lang').value
+    : lastReco?.result.langAdvice?.promptLang?.langs[0]
+}
+
+function renderConverter(result, opts) {
+  const p = result.langAdvice?.promptLang
+  const show = !!(p && p.allowed && result.recommended)
+  $('convert-panel').style.display = show ? '' : 'none'
+  if (!show) return
+  // 후보 언어가 여럿이면 선택지 제공, 하나면 라벨로만 표시
+  $('conv-lang-row').style.display = p.langs.length > 1 ? '' : 'none'
+  if (p.langs.length > 1) {
+    $('conv-lang').innerHTML = p.langs
+      .map((l) => `<option value="${l}">${LANG_LABELS[l]}</option>`).join('')
+  }
+  $('conv-target-label').textContent =
+    `— ${LANG_LABELS[opts.outputLang]} 프롬프트를 ${p.langs.map((l) => LANG_LABELS[l]).join('/')}로`
+  $('conv-output').value = ''
+  $('conv-status').textContent = ''
+  $('conv-savings').textContent = ''
+  lastConvCost = null
+}
+
+$('conv-copy').addEventListener('click', async () => {
+  if (!lastReco) return
+  const prompt = buildKeylessPrompt(lastReco.text, convTargetLang(), lastReco.opts.outputLang)
+  await navigator.clipboard.writeText(prompt)
+  $('conv-copy-msg').textContent = '복사됨 — 쓰는 AI 채팅에 붙여넣으세요'
+  setTimeout(() => { $('conv-copy-msg').textContent = '' }, 4000)
+})
+
+$('conv-copy-out').addEventListener('click', async () => {
+  const out = $('conv-output').value
+  if (!out) return
+  await navigator.clipboard.writeText(out)
+  $('conv-out-msg').textContent = '복사됨'
+  setTimeout(() => { $('conv-out-msg').textContent = '' }, 3000)
+})
+
+$('conv-run').addEventListener('click', async () => {
+  if (!lastReco) return
+  const key = $('conv-key').value.trim()
+  if (!key) { $('conv-status').innerHTML = '<span class="red">Anthropic API 키를 입력하세요 (또는 방법 ①을 쓰세요)</span>'; return }
+  if ($('conv-key-save').checked) localStorage.setItem(KEY_STORAGE, key)
+  $('conv-run').disabled = true
+  $('conv-status').textContent = `변환 중... (${CONVERT_MODEL})`
+  try {
+    const r = await convertViaAnthropic(lastReco.text, convTargetLang(), lastReco.opts.outputLang, key)
+    $('conv-output').value = r.text
+    const haiku = getModel(CONVERT_MODEL)
+    lastConvCost = haiku ? estimateCost(haiku, {
+      inputTokens: r.usage?.input_tokens ?? 0,
+      outputTokens: r.usage?.output_tokens ?? 0,
+    }).totalCost : null
+    $('conv-status').innerHTML =
+      `변환 완료 · 변환 비용 ${lastConvCost != null ? formatUSD(lastConvCost) : '?'}` +
+      (r.truncated ? ' · <span class="red">출력 한도로 잘렸습니다 — 원문을 나눠 변환하세요</span>' : '')
+    if (!r.truncated) await measureSavings()
+  } catch (e) {
+    $('conv-status').innerHTML = `<span class="red">${e.message}</span>`
+  } finally {
+    $('conv-run').disabled = false
+  }
+})
+
+$('conv-measure').addEventListener('click', () => measureSavings())
+
+async function measureSavings() {
+  if (!lastReco) return
+  const converted = $('conv-output').value.trim()
+  if (!converted) { $('conv-savings').innerHTML = '<span class="red">변환 결과가 비어 있습니다 — 방법 ①의 결과를 붙여넣거나 즉시 변환을 실행하세요</span>'; return }
+  const { result, opts, text } = lastReco
+  const model = result.recommended.model
+  $('conv-savings').textContent = '측정 중...'
+  try {
+    const before = correctTokens((await tokenize(text, model.tokenizer)).length, model.id, detectProfile(text))
+    const after = correctTokens((await tokenize(converted, model.tokenizer)).length, model.id, detectProfile(converted))
+    const usage = (tok) => ({ inputTokens: tok, outputTokens: opts.outputTokens })
+    const costB = estimateCost(model, usage(before.tokens))
+    const costA = estimateCost(model, usage(after.tokens))
+    const pct = before.tokens ? ((after.tokens - before.tokens) / before.tokens * 100) : 0
+    let html =
+      `${model.name} 기준 입력 토큰 ${before.tokens.toLocaleString()} → <b>${after.tokens.toLocaleString()}</b> ` +
+      `(<b class="${pct <= 0 ? 'green' : 'red'}">${pct > 0 ? '+' : ''}${pct.toFixed(1)}%</b>)`
+    if (costB && costA) {
+      const monthly = (costB.totalCost - costA.totalCost) * opts.runsPerMonth
+      html += ` · 요청당 ${formatUSD(costB.totalCost)} → ${formatUSD(costA.totalCost)}` +
+        ` · 월 ${opts.runsPerMonth}회 기준 <b class="${monthly >= 0 ? 'green' : 'red'}">${monthly >= 0 ? '−' : '+'}${formatUSD(Math.abs(monthly))}</b>`
+      if (lastConvCost != null && monthly > 0) {
+        const perRunSave = costB.totalCost - costA.totalCost
+        html += ` · 변환 비용은 ${Math.ceil(lastConvCost / perRunSave).toLocaleString()}회 실행이면 회수`
+      }
+    }
+    if (pct > 0) {
+      html += '<br /><span class="dim">토큰이 오히려 늘었습니다 — 이 경우 변환의 이득은 비용이 아니라 지시 이해도입니다. 반복 실행 프롬프트가 아니면 원문 유지도 고려하세요.</span>'
+    }
+    $('conv-savings').innerHTML = html
+  } catch (e) {
+    $('conv-savings').innerHTML = `<span class="red">측정 오류: ${e.message}</span>`
+  }
+}
+
 // ── 가격 직접 입력 ──
 $('price-toggle').addEventListener('click', () => {
   const box = $('price-edit')
@@ -245,11 +357,21 @@ $('price-reset').addEventListener('click', () => {
 // ── Claude 정확 측정 ──
 // 키 저장은 옵트인: 체크 시에만 localStorage, 기본은 메모리(탭 닫으면 소멸)
 const savedKey = localStorage.getItem(KEY_STORAGE)
-if (savedKey) { $('api-key').value = savedKey; $('key-save').checked = true }
-$('key-save').addEventListener('change', () => {
-  if (!$('key-save').checked) localStorage.removeItem(KEY_STORAGE)
-  else if ($('api-key').value.trim()) localStorage.setItem(KEY_STORAGE, $('api-key').value.trim())
-})
+if (savedKey) {
+  $('api-key').value = savedKey; $('key-save').checked = true
+  $('conv-key').value = savedKey; $('conv-key-save').checked = true
+}
+// 정확측정·변환기 두 패널이 같은 키 저장소를 공유한다 — 어느 쪽에서 꺼도 함께 삭제
+function bindKeySave(checkboxId, inputId, otherCheckboxId) {
+  $(checkboxId).addEventListener('change', () => {
+    const on = $(checkboxId).checked
+    $(otherCheckboxId).checked = on
+    if (!on) localStorage.removeItem(KEY_STORAGE)
+    else if ($(inputId).value.trim()) localStorage.setItem(KEY_STORAGE, $(inputId).value.trim())
+  })
+}
+bindKeySave('key-save', 'api-key', 'conv-key-save')
+bindKeySave('conv-key-save', 'conv-key', 'key-save')
 $('exact-btn').addEventListener('click', async () => {
   const key = $('api-key').value.trim()
   const text = $('input').value

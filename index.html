@@ -182,6 +182,39 @@
           </table>
         </div>
         <div class="hint">등급 산정과 가격은 <code>models.json</code>(확인일·출처 포함) 기준의 휴리스틱입니다. 등급이 "미달"인 모델도 검수를 전제로 쓸 수 있습니다.</div>
+
+        <div class="panel" id="convert-panel" style="display:none">
+          <h3>🌐 프롬프트 변환 <span class="dim" id="conv-target-label"></span></h3>
+          <div class="row" id="conv-lang-row" style="display:none; margin-bottom:8px">
+            <span class="dim">변환 언어</span><select id="conv-lang"></select>
+          </div>
+          <div class="hint" style="margin-top:0">
+            <b>방법 ① — 키 없이:</b> 변환 지시문을 복사해 평소 쓰는 AI 채팅에 붙여넣으세요.
+            나온 결과를 아래 "변환 결과"에 붙여넣으면 절약 효과를 측정합니다. (변환 비용 0)
+          </div>
+          <div class="row" style="margin:6px 0 10px">
+            <button class="ghost" id="conv-copy" style="padding:5px 12px; font-size:0.8rem">📋 변환 지시문 복사</button>
+            <span class="dim" id="conv-copy-msg"></span>
+          </div>
+          <div class="hint">
+            <b>방법 ② — 내 Anthropic 키로 즉시 변환</b> (Haiku 사용, 프롬프트당 보통 $0.01 미만).
+            CSP가 Anthropic 외 모든 통신을 차단하므로 즉시 변환은 Anthropic 키만 지원합니다 — 키 처리 방식은 위 "정확 측정" 패널의 🔒 설명과 동일합니다.
+          </div>
+          <div class="row" style="margin:6px 0 0">
+            <input type="password" id="conv-key" placeholder="sk-ant-..." style="flex:1; min-width:220px" />
+            <button id="conv-run">즉시 변환</button>
+          </div>
+          <label style="margin:6px 0 0"><input type="checkbox" id="conv-key-save" /> 이 브라우저에 키 저장 (공용 PC에서는 끄세요)</label>
+          <div class="hint" id="conv-status"></div>
+          <label for="conv-output">변환 결과 <span class="dim">(방법 ①은 여기에 붙여넣기)</span></label>
+          <textarea id="conv-output" style="min-height:120px" placeholder="변환된 프롬프트가 여기 표시됩니다"></textarea>
+          <div class="row" style="margin-top:8px">
+            <button class="ghost" id="conv-measure" style="padding:5px 12px; font-size:0.8rem">절약 효과 측정</button>
+            <button class="ghost" id="conv-copy-out" style="padding:5px 12px; font-size:0.8rem">📋 결과 복사</button>
+            <span class="dim" id="conv-out-msg"></span>
+          </div>
+          <div class="hint" id="conv-savings"></div>
+        </div>
       </div>
     </div>
 
