@@ -4,6 +4,7 @@
 
 import { getModels, estimateCost, effectivePricing, tierLabel } from './pricing.js'
 import { tokenize } from './tokenizers.js'
+import { detectProfile, correctTokens } from './correction.js'
 
 export const TASK_TYPES = [
   { id: 'simple',  label: '분류 · 요약 · 추출 · 포맷 변환', baseTier: 1 },
@@ -47,13 +48,17 @@ export async function buildComparison(text, opts) {
     }
   }
 
+  const profile = detectProfile(text)
   const rows = models.map((model) => {
-    const tokens = tokenCounts.get(model.tokenizer)
+    const raw = tokenCounts.get(model.tokenizer)
+    const corr = raw != null ? correctTokens(raw, model.id, profile) : null
+    const tokens = corr?.tokens ?? null
     const usage = { inputTokens: tokens ?? 0, outputTokens: opts.outputTokens }
     const perRun = tokens != null ? estimateCost(model, usage) : null
     return {
       model,
       tokens,
+      accuracy: corr?.accuracy ?? null,
       perRun,
       monthly: perRun ? perRun.totalCost * opts.runsPerMonth : null,
       eligible: model.tier >= needTier && perRun !== null,

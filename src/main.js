@@ -1,18 +1,20 @@
 import { loadCatalog, getModels, getModel, estimateCost, effectivePricing, saveOverride, formatUSD, tierLabel } from './pricing.js'
 import { tokenize, countTokensExact } from './tokenizers.js'
 import { TASK_TYPES, TOLERANCES, buildComparison, explain } from './recommend.js'
+import { loadCalibration, detectProfile, correctTokens } from './correction.js'
 
 const $ = (id) => document.getElementById(id)
 const KEY_STORAGE = 'tokencalc_anthropic_key'
 
-let currentTokens = []
+let currentTokens = []   // 원시 토큰 배열 (보정 전)
+let currentCorr = null   // 보정 결과 { tokens, accuracy, label }
 let lastTime = 0
 
 const selectedModel = () => getModel($('model').value)
 
 // ── 초기화: 카탈로그 로드 후 UI 구성 ──
 async function init() {
-  await loadCatalog()
+  await Promise.all([loadCatalog(), loadCalibration()])
 
   // 모델 셀렉트 (벤더별 그룹)
   const byVendor = new Map()
@@ -63,26 +65,40 @@ async function recalc() {
     const start = performance.now()
     currentTokens = await tokenize(text, model.tokenizer)
     lastTime = performance.now() - start
+    currentCorr = correctTokens(currentTokens.length, model.id, detectProfile(text))
     $('time').textContent = text
-      ? `계산 시간 ${lastTime.toFixed(1)} ms · 로컬 토크나이저(${model.tokenizer}) 기준 추정치`
+      ? `계산 시간 ${lastTime.toFixed(1)} ms`
       : ''
   } catch (e) {
     $('time').textContent = `오류: ${e.message}`
     currentTokens = []
+    currentCorr = null
   }
   render()
 }
 
+const ACCURACY_CLASS = { exact: 'green', calibrated: '', approx: 'red' }
+
 function render() {
   const model = selectedModel()
   if (!model) return
-  const inTok = currentTokens.length
+  const inTok = currentCorr?.tokens ?? 0
   const outTok = Math.max(0, Number($('out-tokens').value) || 0)
+
+  // 정확도 배지
+  if (currentCorr && currentTokens.length) {
+    const cls = ACCURACY_CLASS[currentCorr.accuracy] ?? ''
+    $('accuracy-badge').innerHTML =
+      `<span class="${cls}">${currentCorr.label}</span>` +
+      (currentCorr.note ? ` <span class="dim">· ${currentCorr.note}</span>` : '')
+  } else {
+    $('accuracy-badge').textContent = ''
+  }
 
   $('in-tokens').textContent = inTok.toLocaleString()
   $('total-tokens').textContent = (inTok + outTok).toLocaleString()
-  $('tok-count').textContent = inTok
-  $('tokens-raw').textContent = inTok ? JSON.stringify(currentTokens) : ''
+  $('tok-count').textContent = currentTokens.length
+  $('tokens-raw').textContent = currentTokens.length ? JSON.stringify(currentTokens) : ''
 
   // 가격 상태 표시
   const p = effectivePricing(model)
@@ -173,10 +189,12 @@ $('reco-btn').addEventListener('click', async () => {
         : r.eligible ? '충족'
         : '<span class="dim">등급 미달</span>'
       const style = isReco ? ' style="color:var(--green); font-weight:700"' : ''
+      const accMark = r.accuracy === 'calibrated' ? '<span class="dim" style="font-size:0.7rem"> 보정</span>'
+        : r.accuracy === 'approx' ? '<span class="dim" style="font-size:0.7rem"> 근사</span>' : ''
       return `<tr${style}>
         <td style="text-align:left">${r.model.name}<span class="dim" style="font-size:0.75rem"> ${r.model.vendor}</span></td>
         <td>${tierLabel(r.model.tier)}</td>
-        <td style="text-align:right">${r.tokens != null ? r.tokens.toLocaleString() : '—'}</td>
+        <td style="text-align:right">${r.tokens != null ? r.tokens.toLocaleString() + accMark : '—'}</td>
         <td style="text-align:right">${r.perRun ? formatUSD(r.perRun.totalCost) : '—'}</td>
         <td style="text-align:right">${r.monthly != null ? formatUSD(r.monthly) : '—'}</td>
         <td style="text-align:right">${verdict}</td>
@@ -232,11 +250,11 @@ $('exact-btn').addEventListener('click', async () => {
   $('exact-result').textContent = '측정 중...'
   try {
     const exact = await countTokensExact(text, selectedModel().id, key)
-    const local = currentTokens.length
-    const dev = local ? ((local - exact) / exact * 100) : 0
+    const corrected = currentCorr?.tokens ?? 0
+    const dev = corrected ? ((corrected - exact) / exact * 100) : 0
     $('exact-result').innerHTML =
-      `정확 토큰: <b class="green">${exact.toLocaleString()}</b> · 로컬 추정 ${local.toLocaleString()} ` +
-      `(편차 <b>${dev > 0 ? '+' : ''}${dev.toFixed(1)}%</b>)`
+      `정확 토큰: <b class="green">${exact.toLocaleString()}</b> · 보정 추정 ${corrected.toLocaleString()} ` +
+      `(편차 <b>${dev > 0 ? '+' : ''}${dev.toFixed(1)}%</b>) · 원시 로컬 ${currentTokens.length.toLocaleString()}`
   } catch (e) {
     $('exact-result').innerHTML = `<span class="red">${e.message}</span>`
   } finally {

@@ -84,7 +84,8 @@
     <textarea id="input" placeholder="여기에 붙여넣거나 파일을 불러오면 자동으로 계산됩니다"></textarea>
 
     <div class="stats">
-      <div class="stat"><div class="k">입력 토큰</div><div class="v" id="in-tokens">0</div></div>
+      <div class="stat"><div class="k">입력 토큰</div><div class="v" id="in-tokens">0</div>
+        <div class="dim" style="font-size:0.75rem" id="accuracy-badge"></div></div>
       <div class="stat"><div class="k">예상 출력 토큰</div><input type="number" id="out-tokens" value="500" min="0" /></div>
       <div class="stat"><div class="k">총 토큰</div><div class="v" id="total-tokens">0</div></div>
     </div>
@@ -176,7 +177,7 @@
     </div>
 
     <details>
-      <summary>토큰 배열 보기 (<span id="tok-count">0</span>)</summary>
+      <summary>원시 토큰 배열 보기 (<span id="tok-count">0</span> — 보정 전 로컬 계산값)</summary>
       <div class="tokens-raw" id="tokens-raw"></div>
     </details>
 
