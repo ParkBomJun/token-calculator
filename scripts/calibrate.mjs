@@ -149,17 +149,41 @@ const VENDORS = [
         { authorization: `Bearer ${key}` },
         { model, messages: [{ role: 'user', content: text }], max_completion_tokens: 8 })).usage.prompt_tokens,
   },
+  {
+    name: 'OpenRouter', env: 'OPENROUTER_API_KEY',
+    info: '초소액 과금 · GPT/GLM 대체 측정 + Claude 교차검증 · 발급: openrouter.ai/keys',
+    // 모델마다 비교할 로컬 토크나이저가 다르다. claude 항목은 직접 실측과의 교차검증용 —
+    // OpenRouter가 네이티브 토큰 수를 전달하는지(자체 정규화 여부)를 여기서 판별한다.
+    models: [
+      { id: 'openai/gpt-5.6-luna', local: 'o200k' },
+      { id: 'z-ai/glm-5.2', local: 'glm5' },
+      { id: 'anthropic/claude-sonnet-5', local: 'claude' },
+    ],
+    count: async (text, model, key) =>
+      (await post('https://openrouter.ai/api/v1/chat/completions',
+        { authorization: `Bearer ${key}` },
+        { model, messages: [{ role: 'user', content: text }], max_tokens: 8, usage: { include: true } })).usage.prompt_tokens,
+    onModelError: async (key) => {
+      const res = await fetch('https://openrouter.ai/api/v1/models', { headers: { authorization: `Bearer ${key}` } })
+      const json = await res.json().catch(() => ({}))
+      const ids = (json.data ?? []).map((m) => m.id)
+        .filter((id) => /^(openai\/gpt-5|z-ai\/glm-5|anthropic\/claude-sonnet-5)/.test(id))
+      if (ids.length) console.log('    ↳ OpenRouter에서 매칭되는 모델 ID:', ids.slice(0, 12).join(', '))
+    },
+  },
 ]
 
 // ── 측정 ──
 async function measureVendor(v, key, locals) {
   const vendorResult = {}
-  for (const model of v.models) {
+  for (const spec of v.models) {
+    const model = typeof spec === 'string' ? spec : spec.id
+    const localKey = typeof spec === 'string' ? v.local : spec.local
     const entry = {}
-    console.log(`  [${model}]`)
+    console.log(`  [${model}] (로컬 기준: ${localKey})`)
     for (const [name, text] of Object.entries(SAMPLES)) {
-      const l1 = locals[v.local].encode(text).length
-      const l2 = locals[v.local].encode(doubled(text)).length
+      const l1 = locals[localKey].encode(text).length
+      const l2 = locals[localKey].encode(doubled(text)).length
       try {
         const e1 = await v.count(text, model, key)
         await sleep(250)
