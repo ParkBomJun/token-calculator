@@ -1,0 +1,357 @@
+{
+  "measuredAt": "2026-07-11",
+  "method": "delta: ratio = (exact(2x)-exact(1x)) / (local(2x)-local(1x))",
+  "vendors": {
+    "Anthropic": {
+      "claude-fable-5": {
+        "ko-prose": {
+          "local": 310,
+          "exact": 302,
+          "ratio": 0.955,
+          "fixedOverhead": 6
+        },
+        "ko-instruction": {
+          "local": 239,
+          "exact": 236,
+          "ratio": 0.9625,
+          "fixedOverhead": 6
+        },
+        "en-prose": {
+          "local": 98,
+          "exact": 158,
+          "ratio": 1.5455,
+          "fixedOverhead": 7
+        },
+        "zh-prose": {
+          "local": 195,
+          "exact": 195,
+          "ratio": 0.9694,
+          "fixedOverhead": 6
+        },
+        "code": {
+          "local": 128,
+          "exact": 199,
+          "ratio": 1.5039,
+          "fixedOverhead": 7
+        },
+        "mixed": {
+          "local": 140,
+          "exact": 156,
+          "ratio": 1.0709,
+          "fixedOverhead": 6
+        },
+        "_summary": {
+          "meanRatio": 1.1679,
+          "spread": 0.5905,
+          "samples": 6
+        }
+      },
+      "claude-opus-4-8": {
+        "ko-prose": {
+          "local": 310,
+          "exact": 302,
+          "ratio": 0.955,
+          "fixedOverhead": 6
+        },
+        "ko-instruction": {
+          "local": 239,
+          "exact": 236,
+          "ratio": 0.9625,
+          "fixedOverhead": 6
+        },
+        "en-prose": {
+          "local": 98,
+          "exact": 158,
+          "ratio": 1.5455,
+          "fixedOverhead": 7
+        },
+        "zh-prose": {
+          "local": 195,
+          "exact": 195,
+          "ratio": 0.9694,
+          "fixedOverhead": 6
+        },
+        "code": {
+          "local": 128,
+          "exact": 199,
+          "ratio": 1.5039,
+          "fixedOverhead": 7
+        },
+        "mixed": {
+          "local": 140,
+          "exact": 156,
+          "ratio": 1.0709,
+          "fixedOverhead": 6
+        },
+        "_summary": {
+          "meanRatio": 1.1679,
+          "spread": 0.5905,
+          "samples": 6
+        }
+      },
+      "claude-sonnet-5": {
+        "ko-prose": {
+          "local": 310,
+          "exact": 302,
+          "ratio": 0.955,
+          "fixedOverhead": 6
+        },
+        "ko-instruction": {
+          "local": 239,
+          "exact": 236,
+          "ratio": 0.9625,
+          "fixedOverhead": 6
+        },
+        "en-prose": {
+          "local": 98,
+          "exact": 158,
+          "ratio": 1.5455,
+          "fixedOverhead": 7
+        },
+        "zh-prose": {
+          "local": 195,
+          "exact": 195,
+          "ratio": 0.9694,
+          "fixedOverhead": 6
+        },
+        "code": {
+          "local": 128,
+          "exact": 199,
+          "ratio": 1.5039,
+          "fixedOverhead": 7
+        },
+        "mixed": {
+          "local": 140,
+          "exact": 156,
+          "ratio": 1.0709,
+          "fixedOverhead": 6
+        },
+        "_summary": {
+          "meanRatio": 1.1679,
+          "spread": 0.5905,
+          "samples": 6
+        }
+      },
+      "claude-haiku-4-5": {
+        "ko-prose": {
+          "local": 310,
+          "exact": 304,
+          "ratio": 0.955,
+          "fixedOverhead": 8
+        },
+        "ko-instruction": {
+          "local": 239,
+          "exact": 238,
+          "ratio": 0.9625,
+          "fixedOverhead": 8
+        },
+        "en-prose": {
+          "local": 98,
+          "exact": 111,
+          "ratio": 1.0606,
+          "fixedOverhead": 7
+        },
+        "zh-prose": {
+          "local": 195,
+          "exact": 197,
+          "ratio": 0.9694,
+          "fixedOverhead": 8
+        },
+        "code": {
+          "local": 128,
+          "exact": 157,
+          "ratio": 1.1705,
+          "fixedOverhead": 7
+        },
+        "mixed": {
+          "local": 140,
+          "exact": 150,
+          "ratio": 1.0142,
+          "fixedOverhead": 8
+        },
+        "_summary": {
+          "meanRatio": 1.022,
+          "spread": 0.2155,
+          "samples": 6
+        }
+      }
+    },
+    "Google": {
+      "gemini-3-pro": {},
+      "gemini-3.5-flash": {
+        "ko-prose": {
+          "local": 196,
+          "exact": 165,
+          "ratio": 0.8426,
+          "fixedOverhead": 0
+        },
+        "ko-instruction": {
+          "local": 151,
+          "exact": 123,
+          "ratio": 0.8158,
+          "fixedOverhead": 0
+        },
+        "en-prose": {
+          "local": 94,
+          "exact": 94,
+          "ratio": 1,
+          "fixedOverhead": 0
+        },
+        "zh-prose": {
+          "local": 110,
+          "exact": 120,
+          "ratio": 1.0901,
+          "fixedOverhead": 0
+        },
+        "code": {
+          "local": 136,
+          "exact": 136,
+          "ratio": 1,
+          "fixedOverhead": 0
+        },
+        "mixed": {
+          "local": 118,
+          "exact": 114,
+          "ratio": 0.9664,
+          "fixedOverhead": 0
+        },
+        "_summary": {
+          "meanRatio": 0.9525,
+          "spread": 0.2743,
+          "samples": 6
+        }
+      },
+      "gemini-3.1-flash-lite": {
+        "ko-prose": {
+          "local": 196,
+          "exact": 165,
+          "ratio": 0.8426,
+          "fixedOverhead": 0
+        },
+        "ko-instruction": {
+          "local": 151,
+          "exact": 123,
+          "ratio": 0.8158,
+          "fixedOverhead": 0
+        },
+        "en-prose": {
+          "local": 94,
+          "exact": 94,
+          "ratio": 1,
+          "fixedOverhead": 0
+        },
+        "zh-prose": {
+          "local": 110,
+          "exact": 120,
+          "ratio": 1.0901,
+          "fixedOverhead": 0
+        },
+        "code": {
+          "local": 136,
+          "exact": 136,
+          "ratio": 1,
+          "fixedOverhead": 0
+        },
+        "mixed": {
+          "local": 118,
+          "exact": 114,
+          "ratio": 0.9664,
+          "fixedOverhead": 0
+        },
+        "_summary": {
+          "meanRatio": 0.9525,
+          "spread": 0.2743,
+          "samples": 6
+        }
+      }
+    },
+    "DeepSeek": {
+      "deepseek-v4-flash": {
+        "ko-prose": {
+          "local": 196,
+          "exact": 200,
+          "ratio": 1,
+          "fixedOverhead": 4
+        },
+        "ko-instruction": {
+          "local": 156,
+          "exact": 160,
+          "ratio": 1,
+          "fixedOverhead": 4
+        },
+        "en-prose": {
+          "local": 99,
+          "exact": 103,
+          "ratio": 1,
+          "fixedOverhead": 4
+        },
+        "zh-prose": {
+          "local": 97,
+          "exact": 101,
+          "ratio": 1,
+          "fixedOverhead": 4
+        },
+        "code": {
+          "local": 125,
+          "exact": 129,
+          "ratio": 1,
+          "fixedOverhead": 4
+        },
+        "mixed": {
+          "local": 110,
+          "exact": 114,
+          "ratio": 1,
+          "fixedOverhead": 4
+        },
+        "_summary": {
+          "meanRatio": 1,
+          "spread": 0,
+          "samples": 6
+        }
+      },
+      "deepseek-v4-pro": {
+        "ko-prose": {
+          "local": 196,
+          "exact": 200,
+          "ratio": 1,
+          "fixedOverhead": 4
+        },
+        "ko-instruction": {
+          "local": 156,
+          "exact": 160,
+          "ratio": 1,
+          "fixedOverhead": 4
+        },
+        "en-prose": {
+          "local": 99,
+          "exact": 103,
+          "ratio": 1,
+          "fixedOverhead": 4
+        },
+        "zh-prose": {
+          "local": 97,
+          "exact": 101,
+          "ratio": 1,
+          "fixedOverhead": 4
+        },
+        "code": {
+          "local": 125,
+          "exact": 129,
+          "ratio": 1,
+          "fixedOverhead": 4
+        },
+        "mixed": {
+          "local": 110,
+          "exact": 114,
+          "ratio": 1,
+          "fixedOverhead": 4
+        },
+        "_summary": {
+          "meanRatio": 1,
+          "spread": 0,
+          "samples": 6
+        }
+      }
+    }
+  }
+}
