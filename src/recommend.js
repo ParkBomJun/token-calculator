@@ -72,7 +72,51 @@ export async function buildComparison(text, opts) {
   // "습관적 최상위 선택" 기준점: 가격이 등록된 티어3 중 가장 비싼 것
   const topTierRow = [...rows].reverse().find((r) => r.model.tier === 3 && r.monthly != null) ?? null
 
-  return { needTier, rows, recommended, topTierRow }
+  const langAdvice = buildLangAdvice(recommended, rows, needTier, opts)
+
+  return { needTier, rows, recommended, topTierRow, langAdvice }
+}
+
+export const LANG_LABELS = { ko: '한국어', en: '영어', zh: '중국어' }
+
+/**
+ * 언어 축 조언 — 두 축을 분리해서 판단한다:
+ *  · understand(프롬프트 이해): 변환 허용 시 더 잘 이해하는 언어로 프롬프팅 권장 (우회 가능)
+ *  · generate(출력 생성 품질): 결과물 언어의 품질 한계 — 변환으로 우회 불가, 대안 모델 병기
+ */
+function buildLangAdvice(recommended, rows, needTier, opts) {
+  const outLang = opts.outputLang ?? 'ko'
+  const lang = recommended?.model.lang
+  if (!lang) return null
+  const advice = { promptLang: null, qualityAlt: null }
+
+  // ① 프롬프팅 언어: 변환 허용 시, 결과물 언어보다 더 잘 이해하는 언어가 있으면 권장
+  const u = lang.understand
+  const bestU = Math.max(u.ko ?? 0, u.en ?? 0, u.zh ?? 0)
+  if ((u[outLang] ?? 0) < bestU) {
+    const bests = Object.keys(LANG_LABELS).filter((l) => u[l] === bestU)
+    advice.promptLang = {
+      langs: bests,
+      allowed: !!opts.allowConvert,
+      text: opts.allowConvert
+        ? `권장 프롬프팅 언어: ${bests.map((l) => LANG_LABELS[l]).join(' 또는 ')} — 이 모델은 ${LANG_LABELS[outLang]} 지시 이해가 상대적으로 약합니다. 변환 시 지시 준수율과 토큰 효율이 개선됩니다 (응답은 "${LANG_LABELS[outLang]}로 답하라" 지시로 유지)`
+        : `참고: 이 모델은 ${bests.map((l) => LANG_LABELS[l]).join('·')} 프롬프트를 더 잘 이해합니다. "프롬프트 변환 허용"을 켜면 반영해 안내합니다`,
+    }
+  }
+
+  // ② 출력 품질: 결과물 언어 생성이 만점이 아니면, 만점 모델 중 최저가 대안 병기
+  if ((lang.generate?.[outLang] ?? 0) < 3) {
+    const alt = rows.find((r) =>
+      r.monthly != null && r.model.tier >= needTier &&
+      r.model.lang?.generate?.[outLang] === 3 && r.model.id !== recommended.model.id)
+    if (alt) {
+      advice.qualityAlt = {
+        row: alt,
+        text: `${LANG_LABELS[outLang]} 결과물 품질이 최우선이면: ${alt.model.name} (월 ${alt.monthly < 0.01 ? '$' + alt.monthly.toFixed(6) : '$' + alt.monthly.toFixed(2)}) — ${LANG_LABELS[outLang]} 생성 상위권. 이 차이는 프롬프트 변환으로 메울 수 없습니다`,
+      }
+    }
+  }
+  return (advice.promptLang || advice.qualityAlt) ? advice : null
 }
 
 /** 추천 근거 문장 생성 */

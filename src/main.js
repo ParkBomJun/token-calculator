@@ -171,13 +171,23 @@ $('reco-btn').addEventListener('click', async () => {
       tolerance: $('reco-tol').value,
       outputTokens: Math.max(0, Number($('out-tokens').value) || 0),
       runsPerMonth: Math.max(1, Number($('reco-runs').value) || 1),
+      outputLang: $('reco-lang').value,
+      allowConvert: $('reco-convert').checked,
       onProgress: (msg) => { $('reco-progress').textContent = msg },
     }
     const result = await buildComparison(text, opts)
     $('reco-progress').textContent = ''
 
-    // 추천 문구
-    $('reco-verdict').innerHTML = explain(result, opts).replace(/\*\*(.+?)\*\*/g, '<b class="green">$1</b>')
+    // 추천 문구 + 언어 축 조언
+    let verdictHtml = explain(result, opts).replace(/\*\*(.+?)\*\*/g, '<b class="green">$1</b>')
+    if (result.langAdvice?.promptLang) {
+      const p = result.langAdvice.promptLang
+      verdictHtml += `<div style="margin-top:8px">${p.allowed ? '🌐 ' : ''}<span class="${p.allowed ? '' : 'dim'}">${p.text}</span></div>`
+    }
+    if (result.langAdvice?.qualityAlt) {
+      verdictHtml += `<div style="margin-top:6px" class="dim">✍ ${result.langAdvice.qualityAlt.text}</div>`
+    }
+    $('reco-verdict').innerHTML = verdictHtml
 
     // 비교표
     const tbody = $('reco-table').querySelector('tbody')
