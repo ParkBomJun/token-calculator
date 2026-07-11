@@ -8,6 +8,7 @@
   "models": [
     {
       "id": "claude-fable-5",
+      "openrouter": "anthropic/claude-fable-5",
       "name": "Claude Fable 5",
       "vendor": "Anthropic",
       "tokenizer": "claude",
@@ -42,6 +43,7 @@
     },
     {
       "id": "claude-opus-4-8",
+      "openrouter": "anthropic/claude-opus-4.8",
       "name": "Claude Opus 4.8",
       "vendor": "Anthropic",
       "tokenizer": "claude",
@@ -75,6 +77,7 @@
     },
     {
       "id": "claude-sonnet-5",
+      "openrouter": "anthropic/claude-sonnet-5",
       "name": "Claude Sonnet 5",
       "vendor": "Anthropic",
       "tokenizer": "claude",
@@ -109,6 +112,7 @@
     },
     {
       "id": "claude-haiku-4-5",
+      "openrouter": "anthropic/claude-haiku-4.5",
       "name": "Claude Haiku 4.5",
       "vendor": "Anthropic",
       "tokenizer": "claude",
@@ -142,6 +146,7 @@
     },
     {
       "id": "gpt-5.6-sol",
+      "openrouter": "openai/gpt-5.6-sol",
       "name": "GPT-5.6 Sol",
       "vendor": "OpenAI",
       "tokenizer": "o200k",
@@ -176,6 +181,7 @@
     },
     {
       "id": "gpt-5.6-terra",
+      "openrouter": "openai/gpt-5.6-terra",
       "name": "GPT-5.6 Terra",
       "vendor": "OpenAI",
       "tokenizer": "o200k",
@@ -209,6 +215,7 @@
     },
     {
       "id": "gpt-5.6-luna",
+      "openrouter": "openai/gpt-5.6-luna",
       "name": "GPT-5.6 Luna",
       "vendor": "OpenAI",
       "tokenizer": "o200k",
@@ -242,6 +249,7 @@
     },
     {
       "id": "gemini-3-pro",
+      "openrouter": null,
       "name": "Gemini 3 Pro",
       "vendor": "Google",
       "tokenizer": "gemma",
@@ -276,6 +284,7 @@
     },
     {
       "id": "gemini-3-5-flash",
+      "openrouter": "google/gemini-3.5-flash",
       "name": "Gemini 3.5 Flash",
       "vendor": "Google",
       "tokenizer": "gemma",
@@ -309,6 +318,7 @@
     },
     {
       "id": "gemini-3-1-flash-lite",
+      "openrouter": "google/gemini-3.1-flash-lite",
       "name": "Gemini 3.1 Flash-Lite",
       "vendor": "Google",
       "tokenizer": "gemma",
@@ -342,6 +352,7 @@
     },
     {
       "id": "deepseek-v4-pro",
+      "openrouter": "deepseek/deepseek-v4-pro",
       "name": "DeepSeek V4 Pro",
       "vendor": "DeepSeek",
       "tokenizer": "deepseek-v4",
@@ -375,6 +386,7 @@
     },
     {
       "id": "deepseek-v4-flash",
+      "openrouter": "deepseek/deepseek-v4-flash",
       "name": "DeepSeek V4 Flash",
       "vendor": "DeepSeek",
       "tokenizer": "deepseek-v4",
@@ -408,6 +420,7 @@
     },
     {
       "id": "glm-5.2",
+      "openrouter": "z-ai/glm-5.2",
       "name": "GLM-5.2",
       "vendor": "Zhipu (Z.ai)",
       "tokenizer": "glm5",
@@ -441,6 +454,7 @@
     },
     {
       "id": "glm-5",
+      "openrouter": "z-ai/glm-5",
       "name": "GLM-5",
       "vendor": "Zhipu (Z.ai)",
       "tokenizer": "glm5",
@@ -473,6 +487,7 @@
     },
     {
       "id": "llama3-local",
+      "openrouter": null,
       "name": "Llama 3 (로컬/자체호스팅)",
       "vendor": "Meta",
       "tokenizer": "llama3",

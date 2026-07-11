@@ -3,9 +3,11 @@ import { tokenize, countTokensExact } from './tokenizers.js'
 import { TASK_TYPES, TOLERANCES, buildComparison, explain, LANG_LABELS } from './recommend.js'
 import { loadCalibration, detectProfile, correctTokens } from './correction.js'
 import { buildKeylessPrompt, convertViaAnthropic, CONVERT_MODEL } from './convert.js'
+import { callOpenRouter, loadTally, recordResult, resetTally } from './blind.js'
 
 const $ = (id) => document.getElementById(id)
 const KEY_STORAGE = 'tokencalc_anthropic_key'
+const OR_KEY_STORAGE = 'tokencalc_openrouter_key'
 
 let currentTokens = []   // 원시 토큰 배열 (보정 전)
 let currentCorr = null   // 보정 결과 { tokens, accuracy, label }
@@ -47,6 +49,19 @@ async function init() {
     if (t.id === 'medium') opt.selected = true
     $('reco-tol').appendChild(opt)
   }
+
+  // 블라인드 실험대 셀렉트 (OpenRouter 경유 가능한 모델만)
+  const blindModels = getModels().filter((m) => m.openrouter)
+  for (const sel of ['blind-a', 'blind-b']) {
+    for (const m of blindModels) {
+      const opt = document.createElement('option')
+      opt.value = m.id; opt.textContent = `${m.name} (${m.vendor})`
+      $(sel).appendChild(opt)
+    }
+  }
+  // 기본 대진: 저가 실속형 vs 상위 습관형
+  if (blindModels.some((m) => m.id === 'claude-haiku-4-5')) $('blind-a').value = 'claude-haiku-4-5'
+  if (blindModels.some((m) => m.id === 'claude-sonnet-5')) $('blind-b').value = 'claude-sonnet-5'
 
   render()
 }
@@ -180,6 +195,7 @@ $('reco-btn').addEventListener('click', async () => {
     $('reco-progress').textContent = ''
     lastReco = { result, opts, text }
     renderConverter(result, opts)
+    updateBlindDefaults(result)
 
     // 추천 문구 + 언어 축 조언
     let verdictHtml = explain(result, opts).replace(/\*\*(.+?)\*\*/g, '<b class="green">$1</b>')
@@ -330,6 +346,122 @@ async function measureSavings() {
   }
 }
 
+// ── A/B 블라인드 실험대 ──
+// 두 모델 응답을 무작위 순서로 익명 제시 → 투표 → 공개 + 전적 누적 (블라인드 무결성:
+// 투표 전에는 모델명·토큰·비용을 일절 표시하지 않는다)
+let blindTouched = false          // 사용자가 대진을 직접 고른 뒤에는 추천이 덮어쓰지 않는다
+let currentDuel = null            // { slots: {1:{model,text,usage}, 2:{...}}, voted }
+$('blind-a').addEventListener('change', () => { blindTouched = true })
+$('blind-b').addEventListener('change', () => { blindTouched = true })
+
+// 추천 완료 시 자연스러운 대진 제안: 추천 모델 vs 습관적 최상위
+function updateBlindDefaults(result) {
+  if (blindTouched) return
+  const a = result.recommended?.model
+  const b = result.topTierRow?.model
+  if (a?.openrouter && b?.openrouter && a.id !== b.id) {
+    $('blind-a').value = a.id
+    $('blind-b').value = b.id
+  }
+}
+
+async function runDuel() {
+  const text = $('input').value
+  const key = $('blind-key').value.trim()
+  const a = getModel($('blind-a').value)
+  const b = getModel($('blind-b').value)
+  if (!text) { $('blind-status').innerHTML = '<span class="red">먼저 위에 프롬프트를 입력하세요</span>'; return }
+  if (!key) { $('blind-status').innerHTML = '<span class="red">OpenRouter API 키를 입력하세요</span>'; return }
+  if (a.id === b.id) { $('blind-status').innerHTML = '<span class="red">서로 다른 두 모델을 고르세요</span>'; return }
+  if ($('blind-key-save').checked) localStorage.setItem(OR_KEY_STORAGE, key)
+
+  const maxTokens = Math.min(8192, Math.max(512, (Number($('out-tokens').value) || 500) * 2))
+  $('blind-run').disabled = true
+  $('blind-arena').style.display = 'none'
+  $('blind-status').textContent = `두 모델 생성 중... (출력 한도 ${maxTokens.toLocaleString()} tok)`
+  try {
+    const [ra, rb] = await Promise.all([
+      callOpenRouter(a.openrouter, text, maxTokens, key),
+      callOpenRouter(b.openrouter, text, maxTokens, key),
+    ])
+    // 무작위 순서 배치 — 여기서만 섞고, 투표 전에는 어떤 UI에도 모델을 노출하지 않는다
+    const flip = Math.random() < 0.5
+    currentDuel = {
+      slots: flip
+        ? { 1: { model: a, ...ra }, 2: { model: b, ...rb } }
+        : { 1: { model: b, ...rb }, 2: { model: a, ...ra } },
+      voted: false,
+    }
+    $('blind-status').textContent = ''
+    $('blind-t1').textContent = '응답 1'
+    $('blind-t2').textContent = '응답 2'
+    $('blind-r1').textContent = currentDuel.slots[1].text
+    $('blind-r2').textContent = currentDuel.slots[2].text
+    $('blind-reveal').textContent = ''
+    renderTally(a.id, b.id)
+    for (const id of ['blind-v1', 'blind-v2', 'blind-v0']) $(id).disabled = false
+    $('blind-arena').style.display = ''
+  } catch (e) {
+    $('blind-status').innerHTML = `<span class="red">${e.message}</span>`
+  } finally {
+    $('blind-run').disabled = false
+  }
+}
+
+function slotLabel(n) {
+  const s = currentDuel.slots[n]
+  const cost = estimateCost(s.model, {
+    inputTokens: s.usage?.prompt_tokens ?? 0,
+    outputTokens: s.usage?.completion_tokens ?? 0,
+  })
+  return `${s.model.name}${cost ? ` · ${formatUSD(cost.totalCost)}` : ''}` +
+    ` (in ${(s.usage?.prompt_tokens ?? 0).toLocaleString()} / out ${(s.usage?.completion_tokens ?? 0).toLocaleString()} tok)`
+}
+
+function vote(winnerSlot) {
+  if (!currentDuel || currentDuel.voted) return
+  currentDuel.voted = true
+  const winnerId = winnerSlot ? currentDuel.slots[winnerSlot].model.id : null
+  const [id1, id2] = [currentDuel.slots[1].model.id, currentDuel.slots[2].model.id]
+  recordResult(id1, id2, winnerId)
+  $('blind-t1').textContent = `응답 1 — ${currentDuel.slots[1].model.name}${winnerSlot === 1 ? ' ✓' : ''}`
+  $('blind-t2').textContent = `응답 2 — ${currentDuel.slots[2].model.name}${winnerSlot === 2 ? ' ✓' : ''}`
+  $('blind-reveal').innerHTML =
+    `공개: 응답 1 = <b>${slotLabel(1)}</b> · 응답 2 = <b>${slotLabel(2)}</b>` +
+    `<span class="dim"> (비용은 공식가 환산 — OpenRouter 청구가와 다를 수 있음)</span>`
+  renderTally(id1, id2)
+  for (const id of ['blind-v1', 'blind-v2', 'blind-v0']) $(id).disabled = true
+}
+
+function renderTally(idA, idB) {
+  const t = loadTally(idA, idB)
+  if (!t.trials) { $('blind-tally').textContent = ''; return }
+  const [a, b] = [getModel(idA), getModel(idB)]
+  const [wa, wb] = [t.wins[idA] ?? 0, t.wins[idB] ?? 0]
+  let html = `전적 (${t.trials}회): ${a.name} ${wa}승 · ${b.name} ${wb}승 · 무승부 ${t.ties}`
+  // 해석: 3회 이상이고 저가 모델이 과반을 안 내줬으면 "싼 쪽으로 충분" 신호
+  const pa = effectivePricing(a); const pb = effectivePricing(b)
+  if (t.trials >= 3 && pa.input != null && pb.input != null && pa.input !== pb.input) {
+    const cheap = pa.input < pb.input ? a : b
+    const cheapWins = t.wins[cheap.id] ?? 0
+    const expWins = (cheap.id === idA ? wb : wa)
+    if (cheapWins + t.ties >= expWins) {
+      html += ` — <b class="green">저가 모델(${cheap.name})이 밀리지 않습니다. 이 작업엔 그쪽으로 충분해 보입니다</b>`
+    }
+  }
+  $('blind-tally').innerHTML = html
+}
+
+$('blind-run').addEventListener('click', runDuel)
+$('blind-again').addEventListener('click', runDuel)
+$('blind-v1').addEventListener('click', () => vote(1))
+$('blind-v2').addEventListener('click', () => vote(2))
+$('blind-v0').addEventListener('click', () => vote(null))
+$('blind-reset').addEventListener('click', () => {
+  resetTally($('blind-a').value, $('blind-b').value)
+  $('blind-tally').textContent = '전적을 초기화했습니다'
+})
+
 // ── 가격 직접 입력 ──
 $('price-toggle').addEventListener('click', () => {
   const box = $('price-edit')
@@ -372,6 +504,14 @@ function bindKeySave(checkboxId, inputId, otherCheckboxId) {
 }
 bindKeySave('key-save', 'api-key', 'conv-key-save')
 bindKeySave('conv-key-save', 'conv-key', 'key-save')
+
+// OpenRouter 키는 별도 저장소 (Anthropic 키와 용도·수신처가 다르다)
+const savedOrKey = localStorage.getItem(OR_KEY_STORAGE)
+if (savedOrKey) { $('blind-key').value = savedOrKey; $('blind-key-save').checked = true }
+$('blind-key-save').addEventListener('change', () => {
+  if (!$('blind-key-save').checked) localStorage.removeItem(OR_KEY_STORAGE)
+  else if ($('blind-key').value.trim()) localStorage.setItem(OR_KEY_STORAGE, $('blind-key').value.trim())
+})
 $('exact-btn').addEventListener('click', async () => {
   const key = $('api-key').value.trim()
   const text = $('input').value
