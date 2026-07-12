@@ -285,6 +285,7 @@
     {
       "id": "gemini-3-5-flash",
       "openrouter": "google/gemini-3.5-flash",
+      "directId": "gemini-3.5-flash",
       "name": "Gemini 3.5 Flash",
       "vendor": "Google",
       "tokenizer": "gemma",
@@ -319,6 +320,7 @@
     {
       "id": "gemini-3-1-flash-lite",
       "openrouter": "google/gemini-3.1-flash-lite",
+      "directId": "gemini-3.1-flash-lite",
       "name": "Gemini 3.1 Flash-Lite",
       "vendor": "Google",
       "tokenizer": "gemma",

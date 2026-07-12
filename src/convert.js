@@ -1,7 +1,6 @@
 // 프롬프트 언어 변환기 — 추천 결과의 "권장 프롬프팅 언어"를 실제로 적용한다.
 // 모드 ① 키 없음: 변환 지시문을 만들어 사용자가 평소 쓰는 AI에 붙여넣는다 (변환 비용 0)
-// 모드 ② 본인 키: Anthropic Haiku로 즉시 변환 — CSP connect-src 화이트리스트가
-//   api.anthropic.com뿐이므로 본인 키 모드는 Anthropic 한정이다 (보안 원칙 우선)
+// 모드 ② 본인 키: Haiku로 즉시 변환 — Anthropic 직행 또는 OpenRouter 폴백 (vendors.js)
 
 import { LANG_LABELS } from './recommend.js'
 
@@ -34,37 +33,8 @@ export function buildKeylessPrompt(text, targetLang, outputLang) {
   return `아래 [원문] 프롬프트를 ${LANG_LABELS[targetLang]}로 변환해줘.\n${rules}\n\n[원문]\n${text}`
 }
 
-/**
- * 모드 ②: Anthropic Haiku로 즉시 변환.
- * @returns { text, usage: { input_tokens, output_tokens }, truncated }
- */
-export async function convertViaAnthropic(text, targetLang, outputLang, apiKey) {
-  const system =
-    `당신은 프롬프트 변환기다. 사용자가 보낸 프롬프트를 ${LANG_LABELS[targetLang]}로 변환한다. 규칙:\n` +
+/** 모드 ②의 시스템 프롬프트 — 전송은 vendors.js generate()가 담당한다 */
+export function conversionSystem(targetLang, outputLang) {
+  return `당신은 프롬프트 변환기다. 사용자가 보낸 프롬프트를 ${LANG_LABELS[targetLang]}로 변환한다. 규칙:\n` +
     conversionRules(targetLang, outputLang).map((r, i) => `${i + 1}. ${r}`).join('\n')
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: CONVERT_MODEL,
-      max_tokens: 8192,
-      system,
-      messages: [{ role: 'user', content: text }],
-    }),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => null)
-    throw new Error(err?.error?.message ?? `API 오류 (${res.status})`)
-  }
-  const data = await res.json()
-  return {
-    text: data.content.filter((b) => b.type === 'text').map((b) => b.text).join(''),
-    usage: data.usage,
-    truncated: data.stop_reason === 'max_tokens',
-  }
 }

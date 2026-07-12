@@ -2,12 +2,12 @@ import { loadCatalog, getModels, getModel, estimateCost, effectivePricing, saveO
 import { tokenize, countTokensExact } from './tokenizers.js'
 import { TASK_TYPES, TOLERANCES, buildComparison, explain, LANG_LABELS } from './recommend.js'
 import { loadCalibration, detectProfile, correctTokens } from './correction.js'
-import { buildKeylessPrompt, convertViaAnthropic, CONVERT_MODEL } from './convert.js'
-import { callOpenRouter, loadTally, recordResult, resetTally } from './blind.js'
+import { buildKeylessPrompt, conversionSystem, CONVERT_MODEL } from './convert.js'
+import { loadTally, recordResult, resetTally } from './blind.js'
+import { KEY_VENDORS, initKeys, getKey, setKey, setPersist, getGlmEndpoint, setGlmEndpoint } from './keys.js'
+import { generate, routeFor } from './vendors.js'
 
 const $ = (id) => document.getElementById(id)
-const KEY_STORAGE = 'tokencalc_anthropic_key'
-const OR_KEY_STORAGE = 'tokencalc_openrouter_key'
 
 let currentTokens = []   // 원시 토큰 배열 (보정 전)
 let currentCorr = null   // 보정 결과 { tokens, accuracy, label }
@@ -50,20 +50,58 @@ async function init() {
     $('reco-tol').appendChild(opt)
   }
 
-  // 블라인드 실험대 셀렉트 (OpenRouter 경유 가능한 모델만)
-  const blindModels = getModels().filter((m) => m.openrouter)
+  // 🔑 API 키 패널 — 벤더별 입력을 데이터에서 생성
+  const persist = initKeys()
+  $('keys-save').checked = persist
+  for (const v of KEY_VENDORS) {
+    const row = document.createElement('div')
+    row.className = 'row'
+    row.style.margin = '4px 0'
+    const label = document.createElement('span')
+    label.className = 'dim'
+    label.style.width = '110px'
+    label.textContent = v.vendor
+    const input = document.createElement('input')
+    input.type = 'password'
+    input.id = `key-${v.vendor}`
+    input.placeholder = `${v.placeholder} (발급: ${v.issue})`
+    input.style.flex = '1'
+    input.style.minWidth = '200px'
+    input.value = getKey(v.vendor) ?? ''
+    input.addEventListener('input', () => {
+      setKey(v.vendor, input.value, $('keys-save').checked)
+      if (v.vendor === 'Zhipu (Z.ai)') updateGlmEndpointRow()
+      updateBlindRoute()
+    })
+    row.append(label, input)
+    $('keys-grid').appendChild(row)
+  }
+  $('keys-save').addEventListener('change', () => setPersist($('keys-save').checked))
+  $('glm-endpoint').value = getGlmEndpoint()
+  $('glm-endpoint').addEventListener('change', () => setGlmEndpoint($('glm-endpoint').value))
+  updateGlmEndpointRow()
+
+  // 블라인드 실험대 셀렉트 (직행 또는 OpenRouter로 호출 가능한 모델)
+  const directVendors = new Set(KEY_VENDORS.map((v) => v.vendor))
+  const blindModels = getModels().filter((m) => m.openrouter || directVendors.has(m.vendor))
   for (const sel of ['blind-a', 'blind-b']) {
     for (const m of blindModels) {
       const opt = document.createElement('option')
-      opt.value = m.id; opt.textContent = `${m.name} (${m.vendor})`
+      opt.value = m.id
+      opt.textContent = `${m.name} (${m.vendor})${m.openrouter ? '' : ' — 직행 전용'}`
       $(sel).appendChild(opt)
     }
   }
   // 기본 대진: 저가 실속형 vs 상위 습관형
   if (blindModels.some((m) => m.id === 'claude-haiku-4-5')) $('blind-a').value = 'claude-haiku-4-5'
   if (blindModels.some((m) => m.id === 'claude-sonnet-5')) $('blind-b').value = 'claude-sonnet-5'
+  updateBlindRoute()
 
   render()
+}
+
+function updateGlmEndpointRow() {
+  $('glm-endpoint-row').style.display = getKey('Zhipu (Z.ai)') ? '' : 'none'
 }
 
 // ── 계산 (디바운스) ──
@@ -285,21 +323,19 @@ $('conv-copy-out').addEventListener('click', async () => {
 
 $('conv-run').addEventListener('click', async () => {
   if (!lastReco) return
-  const key = $('conv-key').value.trim()
-  if (!key) { $('conv-status').innerHTML = '<span class="red">Anthropic API 키를 입력하세요 (또는 방법 ①을 쓰세요)</span>'; return }
-  if ($('conv-key-save').checked) localStorage.setItem(KEY_STORAGE, key)
   $('conv-run').disabled = true
   $('conv-status').textContent = `변환 중... (${CONVERT_MODEL})`
   try {
-    const r = await convertViaAnthropic(lastReco.text, convTargetLang(), lastReco.opts.outputLang, key)
-    $('conv-output').value = r.text
     const haiku = getModel(CONVERT_MODEL)
+    const system = conversionSystem(convTargetLang(), lastReco.opts.outputLang)
+    const r = await generate(haiku, lastReco.text, 8192, { system })
+    $('conv-output').value = r.text
     lastConvCost = haiku ? estimateCost(haiku, {
-      inputTokens: r.usage?.input_tokens ?? 0,
-      outputTokens: r.usage?.output_tokens ?? 0,
+      inputTokens: r.usage.prompt_tokens,
+      outputTokens: r.usage.completion_tokens,
     }).totalCost : null
     $('conv-status').innerHTML =
-      `변환 완료 · 변환 비용 ${lastConvCost != null ? formatUSD(lastConvCost) : '?'}` +
+      `변환 완료 (${r.via}) · 변환 비용 ${lastConvCost != null ? formatUSD(lastConvCost) : '?'}` +
       (r.truncated ? ' · <span class="red">출력 한도로 잘렸습니다 — 원문을 나눠 변환하세요</span>' : '')
     if (!r.truncated) await measureSavings()
   } catch (e) {
@@ -351,8 +387,20 @@ async function measureSavings() {
 // 투표 전에는 모델명·토큰·비용을 일절 표시하지 않는다)
 let blindTouched = false          // 사용자가 대진을 직접 고른 뒤에는 추천이 덮어쓰지 않는다
 let currentDuel = null            // { slots: {1:{model,text,usage}, 2:{...}}, voted }
-$('blind-a').addEventListener('change', () => { blindTouched = true })
-$('blind-b').addEventListener('change', () => { blindTouched = true })
+$('blind-a').addEventListener('change', () => { blindTouched = true; updateBlindRoute() })
+$('blind-b').addEventListener('change', () => { blindTouched = true; updateBlindRoute() })
+
+// 대진의 호출 경로 미리보기 — 어느 쪽이 직행이고 어느 쪽이 폴백인지 실행 전에 보여준다
+function updateBlindRoute() {
+  const a = getModel($('blind-a').value)
+  const b = getModel($('blind-b').value)
+  if (!a || !b) { $('blind-route').textContent = ''; return }
+  const fmt = (m) => {
+    const r = routeFor(m)
+    return r ?? '키 없음'
+  }
+  $('blind-route').textContent = `경로: A ${fmt(a)} · B ${fmt(b)}`
+}
 
 // 추천 완료 시 자연스러운 대진 제안: 추천 모델 vs 습관적 최상위
 function updateBlindDefaults(result) {
@@ -367,23 +415,19 @@ function updateBlindDefaults(result) {
 
 async function runDuel() {
   const text = $('input').value
-  const key = $('blind-key').value.trim()
   const a = getModel($('blind-a').value)
   const b = getModel($('blind-b').value)
   if (!text) { $('blind-status').innerHTML = '<span class="red">먼저 위에 프롬프트를 입력하세요</span>'; return }
-  if (!key) { $('blind-status').innerHTML = '<span class="red">OpenRouter API 키를 입력하세요</span>'; return }
   if (a.id === b.id) { $('blind-status').innerHTML = '<span class="red">서로 다른 두 모델을 고르세요</span>'; return }
-  if ($('blind-key-save').checked) localStorage.setItem(OR_KEY_STORAGE, key)
 
   const maxTokens = Math.min(8192, Math.max(512, (Number($('out-tokens').value) || 500) * 2))
   $('blind-run').disabled = true
   $('blind-arena').style.display = 'none'
   $('blind-status').textContent = `두 모델 생성 중... (출력 한도 ${maxTokens.toLocaleString()} tok)`
   try {
-    const [ra, rb] = await Promise.all([
-      callOpenRouter(a.openrouter, text, maxTokens, key),
-      callOpenRouter(b.openrouter, text, maxTokens, key),
-    ])
+    const wrap = (m) => generate(m, text, maxTokens)
+      .catch((e) => { throw new Error(`${m.name}: ${e.message}`) })
+    const [ra, rb] = await Promise.all([wrap(a), wrap(b)])
     // 무작위 순서 배치 — 여기서만 섞고, 투표 전에는 어떤 UI에도 모델을 노출하지 않는다
     const flip = Math.random() < 0.5
     currentDuel = {
@@ -415,7 +459,7 @@ function slotLabel(n) {
     outputTokens: s.usage?.completion_tokens ?? 0,
   })
   return `${s.model.name}${cost ? ` · ${formatUSD(cost.totalCost)}` : ''}` +
-    ` (in ${(s.usage?.prompt_tokens ?? 0).toLocaleString()} / out ${(s.usage?.completion_tokens ?? 0).toLocaleString()} tok)`
+    ` (${s.via} · in ${(s.usage?.prompt_tokens ?? 0).toLocaleString()} / out ${(s.usage?.completion_tokens ?? 0).toLocaleString()} tok)`
 }
 
 function vote(winnerSlot) {
@@ -486,38 +530,12 @@ $('price-reset').addEventListener('click', () => {
   render()
 })
 
-// ── Claude 정확 측정 ──
-// 키 저장은 옵트인: 체크 시에만 localStorage, 기본은 메모리(탭 닫으면 소멸)
-const savedKey = localStorage.getItem(KEY_STORAGE)
-if (savedKey) {
-  $('api-key').value = savedKey; $('key-save').checked = true
-  $('conv-key').value = savedKey; $('conv-key-save').checked = true
-}
-// 정확측정·변환기 두 패널이 같은 키 저장소를 공유한다 — 어느 쪽에서 꺼도 함께 삭제
-function bindKeySave(checkboxId, inputId, otherCheckboxId) {
-  $(checkboxId).addEventListener('change', () => {
-    const on = $(checkboxId).checked
-    $(otherCheckboxId).checked = on
-    if (!on) localStorage.removeItem(KEY_STORAGE)
-    else if ($(inputId).value.trim()) localStorage.setItem(KEY_STORAGE, $(inputId).value.trim())
-  })
-}
-bindKeySave('key-save', 'api-key', 'conv-key-save')
-bindKeySave('conv-key-save', 'conv-key', 'key-save')
-
-// OpenRouter 키는 별도 저장소 (Anthropic 키와 용도·수신처가 다르다)
-const savedOrKey = localStorage.getItem(OR_KEY_STORAGE)
-if (savedOrKey) { $('blind-key').value = savedOrKey; $('blind-key-save').checked = true }
-$('blind-key-save').addEventListener('change', () => {
-  if (!$('blind-key-save').checked) localStorage.removeItem(OR_KEY_STORAGE)
-  else if ($('blind-key').value.trim()) localStorage.setItem(OR_KEY_STORAGE, $('blind-key').value.trim())
-})
+// ── Claude 정확 측정 ── (키는 🔑 중앙 패널에서 관리)
 $('exact-btn').addEventListener('click', async () => {
-  const key = $('api-key').value.trim()
+  const key = getKey('Anthropic')
   const text = $('input').value
-  if (!key) { $('exact-result').innerHTML = '<span class="red">API 키를 입력하세요</span>'; return }
+  if (!key) { $('exact-result').innerHTML = '<span class="red">🔑 API 키 패널에 Anthropic 키를 입력하세요</span>'; return }
   if (!text) { $('exact-result').innerHTML = '<span class="red">먼저 텍스트를 입력하세요</span>'; return }
-  if ($('key-save').checked) localStorage.setItem(KEY_STORAGE, key)
   $('exact-btn').disabled = true
   $('exact-result').textContent = '측정 중...'
   try {

@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <!-- 보안: 통신 가능 도메인을 화이트리스트. 악성 코드가 끼어들어도 API 키를 외부로 보낼 곳이 없다.
        'wasm-unsafe-eval'은 토크나이저 WASM 실행용, unsafe-inline(style)은 인라인 스타일용. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.anthropic.com https://openrouter.ai; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'" />
+  <!-- connect-src는 벤더 공식 API 6곳 한정 — 각 키는 자기 벤더로만 직행한다 (README §6) -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.anthropic.com https://api.openai.com https://generativelanguage.googleapis.com https://api.deepseek.com https://api.z.ai https://open.bigmodel.cn https://openrouter.ai; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'" />
   <title>토큰 계산기</title>
   <style>
     :root {
@@ -111,29 +112,41 @@
       이 모델은 가격이 등록되지 않아 토큰 수만 계산합니다. 위의 "가격 직접 입력"으로 요금을 넣으면 비용이 표시됩니다.
     </div>
 
-    <div class="panel" id="exact-panel" style="display:none">
-      <h3>Claude 정확 측정 <span class="dim">(Anthropic 공식 count_tokens API · 무료)</span></h3>
-      <div class="row">
-        <input type="password" id="api-key" placeholder="sk-ant-... (내 브라우저 → Anthropic 직행, 외부 전송 없음)" style="flex:1; min-width:220px" />
-        <button id="exact-btn">정확 측정</button>
+    <div class="panel" id="keys-panel">
+      <h3>🔑 API 키 <span class="dim">— 전부 선택사항 · 키를 넣은 벤더는 공식 API 직행(중개 마진 0), 없으면 OpenRouter로 폴백</span></h3>
+      <div id="keys-grid"></div>
+      <div class="row" id="glm-endpoint-row" style="margin-top:4px; display:none">
+        <span class="dim">GLM 엔드포인트</span>
+        <select id="glm-endpoint">
+          <option value="z">국제판 (api.z.ai)</option>
+          <option value="cn">중국판 (open.bigmodel.cn)</option>
+        </select>
       </div>
-      <label style="margin:6px 0 0"><input type="checkbox" id="key-save" /> 이 브라우저에 키 저장 (공용 PC에서는 끄세요)</label>
+      <label style="margin:8px 0 0"><input type="checkbox" id="keys-save" /> 이 브라우저에 키 저장 (공용 PC에서는 끄세요 — 끄면 탭 닫을 때 소멸)</label>
       <details style="margin:8px 0 0">
         <summary>🔒 내 키는 어떻게 처리되나? (불안하면 읽어보세요)</summary>
         <div class="hint" style="line-height:1.7">
-          <b>1. 키가 갈 수 있는 곳은 api.anthropic.com 하나뿐입니다.</b>
+          <b>1. 각 키가 갈 수 있는 곳은 자기 벤더의 공식 API뿐입니다.</b>
           이 사이트는 서버가 없는 정적 페이지라 키를 수신할 주체가 없고, 페이지에 선언된
-          CSP(Content-Security-Policy)가 그 외 모든 도메인으로의 통신을 브라우저 차원에서 차단합니다.<br />
-          <b>2. 직접 확인하는 법:</b> F12 → Network 탭을 연 채로 "정확 측정"을 누르면,
-          나가는 요청이 <code>api.anthropic.com/v1/messages/count_tokens</code> 하나뿐인 것을 눈으로 확인할 수 있습니다.<br />
+          CSP(Content-Security-Policy)가 위에 적힌 벤더 공식 도메인 외 모든 통신을 브라우저 차원에서 차단합니다.<br />
+          <b>2. 직접 확인하는 법:</b> F12 → Network 탭을 연 채로 기능을 실행하면,
+          나가는 요청이 해당 벤더 공식 API뿐인 것을 눈으로 확인할 수 있습니다.<br />
           <b>3. 키를 다루는 코드는 공개돼 있습니다:</b>
-          <a href="https://github.com/ParkBomJun/token-calculator/blob/main/src/tokenizers.js" target="_blank" rel="noopener" style="color:var(--accent)">tokenizers.js의 countTokensExact()</a>
-          — 몇 줄 안 되니 직접 읽어볼 수 있습니다.<br />
-          <b>4. 그래도 불안하면 전용 키를 쓰세요:</b> count_tokens는 <b>무료 엔드포인트</b>라서,
-          Anthropic 콘솔에서 지출 한도를 최소($1 등)로 건 워크스페이스의 키를 만들어 쓰면
-          최악의 경우에도 피해가 그 한도로 제한됩니다. 이 기능에는 그런 키로 충분합니다.
+          <a href="https://github.com/ParkBomJun/token-calculator/blob/main/src/vendors.js" target="_blank" rel="noopener" style="color:var(--accent)">vendors.js</a> ·
+          <a href="https://github.com/ParkBomJun/token-calculator/blob/main/src/keys.js" target="_blank" rel="noopener" style="color:var(--accent)">keys.js</a>
+          — 길지 않으니 직접 읽어볼 수 있습니다.<br />
+          <b>4. 그래도 불안하면 전용 키를 쓰세요:</b> 벤더 콘솔에서 지출 한도를 최소($1 등)로 건
+          키를 만들어 쓰면 최악의 경우에도 피해가 그 한도로 제한됩니다.
         </div>
       </details>
+    </div>
+
+    <div class="panel" id="exact-panel" style="display:none">
+      <h3>Claude 정확 측정 <span class="dim">(Anthropic 공식 count_tokens API · 무료)</span></h3>
+      <div class="row">
+        <button id="exact-btn">정확 측정</button>
+        <span class="dim">위 🔑 패널의 Anthropic 키를 사용합니다</span>
+      </div>
       <div class="hint" id="exact-result"></div>
       <div class="hint">로컬 계산은 구세대(Claude 2) 토크나이저 기반 추정치라 실제 청구 토큰과 차이가 날 수 있습니다(특히 한국어). 이 버튼은 선택한 모델 기준의 정확한 값을 반환합니다.</div>
     </div>
@@ -200,14 +213,12 @@
             <span class="dim" id="conv-copy-msg"></span>
           </div>
           <div class="hint">
-            <b>방법 ② — 내 Anthropic 키로 즉시 변환</b> (Haiku 사용, 프롬프트당 보통 $0.01 미만).
-            CSP가 Anthropic 외 모든 통신을 차단하므로 즉시 변환은 Anthropic 키만 지원합니다 — 키 처리 방식은 위 "정확 측정" 패널의 🔒 설명과 동일합니다.
+            <b>방법 ② — 내 키로 즉시 변환</b> (Haiku 사용, 프롬프트당 보통 $0.01 미만).
+            🔑 패널의 Anthropic 키로 직행하고, 없으면 OpenRouter 키로 폴백합니다.
           </div>
           <div class="row" style="margin:6px 0 0">
-            <input type="password" id="conv-key" placeholder="sk-ant-..." style="flex:1; min-width:220px" />
             <button id="conv-run">즉시 변환</button>
           </div>
-          <label style="margin:6px 0 0"><input type="checkbox" id="conv-key-save" /> 이 브라우저에 키 저장 (공용 PC에서는 끄세요)</label>
           <div class="hint" id="conv-status"></div>
           <label for="conv-output">변환 결과 <span class="dim">(방법 ①은 여기에 붙여넣기)</span></label>
           <textarea id="conv-output" style="min-height:120px" placeholder="변환된 프롬프트가 여기 표시됩니다"></textarea>
@@ -238,13 +249,12 @@
         </div>
       </div>
       <div class="row" style="margin-top:8px">
-        <input type="password" id="blind-key" placeholder="OpenRouter 키 sk-or-... (발급: openrouter.ai/keys)" style="flex:1; min-width:220px" />
         <button id="blind-run">블라인드 대결</button>
+        <span class="dim" id="blind-route"></span>
       </div>
-      <label style="margin:6px 0 0"><input type="checkbox" id="blind-key-save" /> 이 브라우저에 키 저장 (공용 PC에서는 끄세요)</label>
       <div class="hint">
         두 응답의 생성 비용이 실제 과금됩니다 (출력은 위 "예상 출력 토큰"×2로 제한 — 추론형 모델의 사고 토큰 여유분).
-        이 키는 CSP상 openrouter.ai로만 전송 가능하며, 처리 방식은 위 🔒 설명과 동일합니다.
+        모델별로 🔑 패널에 해당 벤더 키가 있으면 <b>공식 API 직행(중개 마진 0)</b>, 없으면 OpenRouter 키로 폴백합니다.
         투표 전에는 모델명·비용을 숨기지만, 응답이 스스로 정체를 밝히는 것까지는 막지 못합니다.
       </div>
       <div class="hint" id="blind-status"></div>
