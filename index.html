@@ -249,13 +249,18 @@
           <label style="margin:0 0 2px">모델 B</label>
           <select id="blind-b"></select>
         </div>
+        <div>
+          <label style="margin:0 0 2px">출력 한도 (tok)</label>
+          <input type="number" id="blind-max" value="16384" min="1024" max="32768" step="1024" style="width:110px" />
+        </div>
       </div>
       <div class="row" style="margin-top:8px">
         <button id="blind-run">블라인드 대결</button>
         <span class="dim" id="blind-route"></span>
       </div>
       <div class="hint">
-        두 응답의 생성 비용이 실제 과금됩니다 (출력은 위 "예상 출력 토큰"×2, 최소 2,048로 제한 — 추론형 모델은 사고 토큰이 이 한도를 같이 씁니다).
+        두 응답의 생성 비용이 실제 과금됩니다 — 출력 한도만큼 나올 수 있으니 비용도 그만큼 각오하세요
+        (추론형 모델은 사고 토큰이 이 한도를 같이 쓰고, DeepSeek은 공식 상한 8,192로 자동 제한됩니다).
         모델별로 🔑 패널에 해당 벤더 키가 있으면 <b>공식 API 직행(중개 마진 0)</b>, 없으면 OpenRouter 키로 폴백합니다.
         투표 전에는 모델명·비용을 숨기지만, 응답이 스스로 정체를 밝히는 것까지는 막지 못합니다.
       </div>

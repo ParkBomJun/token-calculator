@@ -420,8 +420,8 @@ async function runDuel() {
   if (!text) { $('blind-status').innerHTML = '<span class="red">먼저 위에 프롬프트를 입력하세요</span>'; return }
   if (a.id === b.id) { $('blind-status').innerHTML = '<span class="red">서로 다른 두 모델을 고르세요</span>'; return }
 
-  // 최소 2048: 사고 토큰을 쓰는 모델이 본문을 시작도 못 하고 잘리는 것 방지
-  const maxTokens = Math.min(8192, Math.max(2048, (Number($('out-tokens').value) || 500) * 2))
+  // 전용 출력 한도 — 비용 계산용 "예상 출력 토큰"과 분리 (코드 생성 대결은 만 토큰 이상 필요)
+  const maxTokens = Math.min(32768, Math.max(1024, Number($('blind-max').value) || 16384))
   $('blind-run').disabled = true
   $('blind-arena').style.display = 'none'
   $('blind-status').textContent = `두 모델 생성 중... (출력 한도 ${maxTokens.toLocaleString()} tok)`

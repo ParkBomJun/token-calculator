@@ -154,7 +154,11 @@ export function routeFor(model) {
  * 모델 1회 생성 — 벤더 키 직행 우선, 없으면 OpenRouter 폴백.
  * @returns { text, usage: { prompt_tokens, completion_tokens }, via, truncated? }
  */
+// 벤더별 출력 상한 — 문서상 한도를 넘겨 보내면 요청 자체가 거부되므로 여기서 클램프
+const OUTPUT_CAPS = { DeepSeek: 8192 }
+
 export async function generate(model, prompt, maxTokens, { system } = {}) {
+  maxTokens = Math.min(maxTokens, OUTPUT_CAPS[model.vendor] ?? Infinity)
   const directKey = ADAPTERS[model.vendor] ? getKey(model.vendor) : null
   if (directKey) {
     const r = await ADAPTERS[model.vendor](model, prompt, maxTokens, directKey, system)
