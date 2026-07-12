@@ -7,6 +7,12 @@ import { loadTally, recordResult, resetTally } from './blind.js'
 import { KEY_VENDORS, initKeys, getKey, setKey, setPersist, getGlmEndpoint, setGlmEndpoint } from './keys.js'
 import { generate, routeFor } from './vendors.js'
 
+// 클릭재킹 방어 — GitHub Pages는 frame-ancestors 응답 헤더를 설정할 수 없으므로(메타 CSP에서는
+// 이 지시어가 무시됨) JS 프레임 버스트로 대체한다: 다른 사이트가 이 페이지를 iframe에 넣으면 즉시 이탈
+if (window.top !== window.self) {
+  try { window.top.location = window.self.location } catch { document.documentElement.textContent = '이 페이지는 iframe 안에서 열 수 없습니다.' }
+}
+
 const $ = (id) => document.getElementById(id)
 // 외부 유래 문자열(벤더 API 에러 메시지 등)을 innerHTML에 넣기 전 반드시 통과시킬 것 —
 // 오염된 응답이 가짜 UI(키 재입력 폼 등)를 주입하는 것을 차단한다
@@ -81,7 +87,18 @@ async function init() {
     row.append(label, input)
     $('keys-grid').appendChild(row)
   }
-  $('keys-save').addEventListener('change', () => setPersist($('keys-save').checked))
+  $('keys-save').addEventListener('change', () => {
+    // 저장은 명시적 재확인을 거친다 — 브라우저 저장소는 비밀 보관소가 아니다
+    if ($('keys-save').checked && !confirm(
+      '키를 이 브라우저(localStorage)에 저장합니다.\n\n' +
+      '· 브라우저 저장소는 완전한 비밀 저장소가 아닙니다\n' +
+      '· 지출 한도를 걸어둔 전용 키만 저장하세요\n' +
+      '· 공용 PC라면 취소를 누르세요')) {
+      $('keys-save').checked = false
+      return
+    }
+    setPersist($('keys-save').checked)
+  })
   $('glm-endpoint').value = getGlmEndpoint()
   $('glm-endpoint').addEventListener('change', () => setGlmEndpoint($('glm-endpoint').value))
   updateGlmEndpointRow()
@@ -635,7 +652,7 @@ for (const n of [1, 2]) {
     a.href = url; a.download = filename
     a.click()
     URL.revokeObjectURL(url)
-    flashMsg(n, currentDuel.voted ? '저장됨 — 파일 상단 주석에 모델 출처 기록' : '저장됨 (투표 전 — 익명, 로컬에서 열면 JS 실행)')
+    flashMsg(n, (currentDuel.voted ? '저장됨 — 파일 상단 주석에 모델 출처 기록. ' : '저장됨 (투표 전 — 익명). ') + '로컬에서 열면 JS가 실행되니 신뢰할 수 있는 결과만 여세요')
   })
 }
 $('blind-preview-close').addEventListener('click', () => {
