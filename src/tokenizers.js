@@ -1,4 +1,4 @@
-// 토크나이저 로더 — 타입별 Promise 캐시 (RisuAI 검토에서 지적한 싱글턴 레이스 방지 구조)
+// 토크나이저 로더 — 타입별 Promise 캐시 (참고 코드 검토에서 지적한 싱글턴 레이스 방지 구조)
 // 동시 호출은 같은 Promise를 공유하고, 한 번 로드된 토크나이저는 세션 내내 재사용된다.
 
 const cache = new Map() // type -> Promise<{ encode(text): number[] }>
