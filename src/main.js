@@ -420,7 +420,8 @@ async function runDuel() {
   if (!text) { $('blind-status').innerHTML = '<span class="red">먼저 위에 프롬프트를 입력하세요</span>'; return }
   if (a.id === b.id) { $('blind-status').innerHTML = '<span class="red">서로 다른 두 모델을 고르세요</span>'; return }
 
-  const maxTokens = Math.min(8192, Math.max(512, (Number($('out-tokens').value) || 500) * 2))
+  // 최소 2048: 사고 토큰을 쓰는 모델이 본문을 시작도 못 하고 잘리는 것 방지
+  const maxTokens = Math.min(8192, Math.max(2048, (Number($('out-tokens').value) || 500) * 2))
   $('blind-run').disabled = true
   $('blind-arena').style.display = 'none'
   $('blind-status').textContent = `두 모델 생성 중... (출력 한도 ${maxTokens.toLocaleString()} tok)`
@@ -436,11 +437,17 @@ async function runDuel() {
         : { 1: { model: b, ...rb }, 2: { model: a, ...ra } },
       voted: false,
     }
-    $('blind-status').textContent = ''
     $('blind-t1').textContent = '응답 1'
     $('blind-t2').textContent = '응답 2'
-    $('blind-r1').textContent = currentDuel.slots[1].text
-    $('blind-r2').textContent = currentDuel.slots[2].text
+    for (const n of [1, 2]) {
+      const s = currentDuel.slots[n]
+      $(`blind-r${n}`).textContent = s.text + (s.truncated ? '\n\n⋯ [출력 한도로 잘림]' : '')
+    }
+    // 잘림은 모델명을 밝히지 않고 응답 번호로만 경고 (블라인드 유지)
+    const cut = [1, 2].filter((n) => currentDuel.slots[n].truncated)
+    $('blind-status').innerHTML = cut.length
+      ? `<span class="red">⚠ 응답 ${cut.join('·')}이(가) 출력 한도로 잘렸습니다</span> — 위 "예상 출력 토큰"을 늘려 다시 대결하면 공정한 비교가 됩니다`
+      : ''
     $('blind-reveal').textContent = ''
     renderTally(a.id, b.id)
     for (const id of ['blind-v1', 'blind-v2', 'blind-v0']) $(id).disabled = false

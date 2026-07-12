@@ -33,6 +33,7 @@ function fromOpenAIStyle(data) {
       prompt_tokens: data.usage?.prompt_tokens ?? 0,
       completion_tokens: data.usage?.completion_tokens ?? 0,
     },
+    truncated: data.choices?.[0]?.finish_reason === 'length',
   }
 }
 
@@ -83,8 +84,12 @@ const ADAPTERS = {
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
         generationConfig: { maxOutputTokens: maxTokens },
       })
-    const text = (data.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? '').join('')
-    if (!text) throw new Error(`빈 응답 (finish: ${data.candidates?.[0]?.finishReason ?? '?'}) — 출력 한도가 사고 토큰에 다 쓰였을 수 있습니다`)
+    // thought: true 파트는 "사고 과정 요약" — 본문에 섞으면 답변이 중간부터 시작하는
+    // 것처럼 보인다 (실사용 버그로 발견). 반드시 걸러낸다.
+    const text = (data.candidates?.[0]?.content?.parts ?? [])
+      .filter((p) => !p.thought)
+      .map((p) => p.text ?? '').join('')
+    if (!text) throw new Error(`빈 응답 (finish: ${data.candidates?.[0]?.finishReason ?? '?'}) — 출력 한도가 사고 토큰에 다 쓰였을 수 있습니다. 예상 출력 토큰을 늘려보세요`)
     const u = data.usageMetadata ?? {}
     return {
       text,
@@ -93,6 +98,7 @@ const ADAPTERS = {
         // 과금 기준에 맞춰 사고 토큰도 출력에 합산
         completion_tokens: (u.candidatesTokenCount ?? 0) + (u.thoughtsTokenCount ?? 0),
       },
+      truncated: data.candidates?.[0]?.finishReason === 'MAX_TOKENS',
     }
   },
 
