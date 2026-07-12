@@ -47,6 +47,7 @@
       padding: 9px 16px; font-weight: 700; cursor: pointer; font-size: 0.9rem; }
     button:disabled { opacity: 0.5; cursor: default; }
     button.ghost { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+    button.mini { padding: 4px 10px; font-size: 0.75rem; }
     details { margin: 12px 0; }
     summary { color: var(--dim); cursor: pointer; font-size: 0.85rem; }
     .tokens-raw { font-size: 0.75rem; color: var(--dim); word-break: break-all;
@@ -267,8 +268,34 @@
       <div class="hint" id="blind-status"></div>
       <div id="blind-arena" style="display:none">
         <div class="blind-grid">
-          <div class="panel" style="margin:0"><h3 id="blind-t1">응답 1</h3><div class="blind-resp" id="blind-r1"></div></div>
-          <div class="panel" style="margin:0"><h3 id="blind-t2">응답 2</h3><div class="blind-resp" id="blind-r2"></div></div>
+          <div class="panel" style="margin:0">
+            <h3 id="blind-t1">응답 1</h3>
+            <div class="row" style="margin-bottom:6px">
+              <button class="ghost mini" id="blind-copy1">📋 복사</button>
+              <button class="ghost mini" id="blind-prev1">▶ 미리보기</button>
+              <button class="ghost mini" id="blind-save1">💾 HTML 저장</button>
+              <span class="dim" id="blind-msg1"></span>
+            </div>
+            <div class="blind-resp" id="blind-r1"></div>
+          </div>
+          <div class="panel" style="margin:0">
+            <h3 id="blind-t2">응답 2</h3>
+            <div class="row" style="margin-bottom:6px">
+              <button class="ghost mini" id="blind-copy2">📋 복사</button>
+              <button class="ghost mini" id="blind-prev2">▶ 미리보기</button>
+              <button class="ghost mini" id="blind-save2">💾 HTML 저장</button>
+              <span class="dim" id="blind-msg2"></span>
+            </div>
+            <div class="blind-resp" id="blind-r2"></div>
+          </div>
+        </div>
+        <div class="panel" id="blind-preview" style="display:none; margin:0 0 10px">
+          <div class="row" style="margin-bottom:6px">
+            <b id="blind-preview-title"></b>
+            <button class="ghost mini" id="blind-preview-close">✕ 닫기</button>
+            <span class="dim">보안 정책상 미리보기에서 JS는 실행되지 않습니다 (HTML/CSS만) — JS 포함 코드는 💾 저장 후 열어보세요</span>
+          </div>
+          <iframe id="blind-preview-frame" sandbox="allow-scripts" style="width:100%; height:480px; border:1px solid var(--border); border-radius:8px; background:#fff"></iframe>
         </div>
         <div class="row">
           <button id="blind-v1">응답 1이 낫다</button>

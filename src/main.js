@@ -451,6 +451,8 @@ async function runDuel() {
     $('blind-reveal').textContent = ''
     renderTally(a.id, b.id)
     for (const id of ['blind-v1', 'blind-v2', 'blind-v0']) $(id).disabled = false
+    $('blind-preview').style.display = 'none'
+    $('blind-preview-frame').srcdoc = ''
     $('blind-arena').style.display = ''
   } catch (e) {
     $('blind-status').innerHTML = `<span class="red">${e.message}</span>`
@@ -502,6 +504,58 @@ function renderTally(idA, idB) {
   }
   $('blind-tally').innerHTML = html
 }
+
+// ── 응답 활용: 복사 / 코드 미리보기 / HTML 저장 ──
+// 응답에서 실행 가능한 코드를 추출한다: html 펜스 우선 → 최대 펜스 블록 → 본문 자체가 HTML
+function extractCode(text) {
+  const blocks = [...text.matchAll(/```(\w*)[ \t]*\n([\s\S]*?)```/g)]
+    .map((m) => ({ lang: m[1].toLowerCase(), code: m[2] }))
+  let pick = blocks.find((b) => b.lang === 'html')
+    ?? blocks.sort((a, b) => b.code.length - a.code.length)[0]
+  if (!pick) {
+    if (/<!doctype|<html/i.test(text)) return text
+    return null
+  }
+  if (pick.lang === 'css') return `<!doctype html><style>${pick.code}</style>`
+  if (['js', 'javascript'].includes(pick.lang)) return `<!doctype html><script>${pick.code}<\/script>`
+  return pick.code
+}
+
+function flashMsg(n, msg) {
+  $(`blind-msg${n}`).textContent = msg
+  setTimeout(() => { $(`blind-msg${n}`).textContent = '' }, 3000)
+}
+
+for (const n of [1, 2]) {
+  $(`blind-copy${n}`).addEventListener('click', async () => {
+    if (!currentDuel) return
+    await navigator.clipboard.writeText(currentDuel.slots[n].text)
+    flashMsg(n, '복사됨')
+  })
+  $(`blind-prev${n}`).addEventListener('click', () => {
+    if (!currentDuel) return
+    const code = extractCode(currentDuel.slots[n].text)
+    if (!code) { flashMsg(n, '코드 블록을 찾지 못했습니다'); return }
+    $('blind-preview-title').textContent = `응답 ${n} 미리보기`
+    $('blind-preview-frame').srcdoc = code
+    $('blind-preview').style.display = ''
+    $('blind-preview').scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  })
+  $(`blind-save${n}`).addEventListener('click', () => {
+    if (!currentDuel) return
+    const code = extractCode(currentDuel.slots[n].text) ?? currentDuel.slots[n].text
+    const url = URL.createObjectURL(new Blob([code], { type: 'text/html' }))
+    const a = document.createElement('a')
+    a.href = url; a.download = `응답${n}.html`
+    a.click()
+    URL.revokeObjectURL(url)
+    flashMsg(n, '저장됨 — 로컬에서 열면 JS까지 실행됩니다')
+  })
+}
+$('blind-preview-close').addEventListener('click', () => {
+  $('blind-preview').style.display = 'none'
+  $('blind-preview-frame').srcdoc = ''
+})
 
 $('blind-run').addEventListener('click', runDuel)
 $('blind-again').addEventListener('click', runDuel)
