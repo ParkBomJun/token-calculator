@@ -6,7 +6,7 @@
   <!-- 보안: 통신 가능 도메인을 화이트리스트. 악성 코드가 끼어들어도 API 키를 외부로 보낼 곳이 없다.
        'wasm-unsafe-eval'은 토크나이저 WASM 실행용, unsafe-inline(style)은 인라인 스타일용. -->
   <!-- connect-src는 벤더 공식 API 6곳 한정 — 각 키는 자기 벤더로만 직행한다 (README §6) -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.anthropic.com https://api.openai.com https://generativelanguage.googleapis.com https://api.deepseek.com https://api.z.ai https://open.bigmodel.cn https://openrouter.ai; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.anthropic.com https://api.openai.com https://generativelanguage.googleapis.com https://api.deepseek.com https://api.z.ai https://open.bigmodel.cn https://openrouter.ai; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'none'" />
   <title>토큰 계산기</title>
   <style>
     :root {
@@ -311,7 +311,8 @@
             <button class="ghost mini" id="blind-preview-close">✕ 닫기</button>
             <span class="dim">보안 정책상 미리보기에서 JS는 실행되지 않습니다 (HTML/CSS만) — JS 포함 코드는 💾 저장 후 열어보세요</span>
           </div>
-          <iframe id="blind-preview-frame" sandbox="allow-scripts" style="width:100%; height:480px; border:1px solid var(--border); border-radius:8px; background:#fff"></iframe>
+          <!-- sandbox 무권한: 모델 생성 HTML은 신뢰할 수 없으므로 스크립트·폼·내비게이션 전부 차단 -->
+          <iframe id="blind-preview-frame" sandbox style="width:100%; height:480px; border:1px solid var(--border); border-radius:8px; background:#fff"></iframe>
         </div>
         <div class="row">
           <button id="blind-v1">응답 1이 낫다</button>

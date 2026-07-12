@@ -8,6 +8,10 @@ import { KEY_VENDORS, initKeys, getKey, setKey, setPersist, getGlmEndpoint, setG
 import { generate, routeFor } from './vendors.js'
 
 const $ = (id) => document.getElementById(id)
+// 외부 유래 문자열(벤더 API 에러 메시지 등)을 innerHTML에 넣기 전 반드시 통과시킬 것 —
+// 오염된 응답이 가짜 UI(키 재입력 폼 등)를 주입하는 것을 차단한다
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 
 let currentTokens = []   // 원시 토큰 배열 (보정 전)
 let currentCorr = null   // 보정 결과 { tokens, accuracy, label }
@@ -63,6 +67,7 @@ async function init() {
     label.textContent = v.vendor
     const input = document.createElement('input')
     input.type = 'password'
+    input.autocomplete = 'off' // 브라우저 비밀번호 관리자가 키를 저장 제안하지 않도록
     input.id = `key-${v.vendor}`
     input.placeholder = `${v.placeholder} (발급: ${v.issue})`
     input.style.flex = '1'
@@ -269,7 +274,7 @@ $('reco-btn').addEventListener('click', async () => {
     }).join('')
     $('reco-result').style.display = ''
   } catch (e) {
-    $('reco-progress').innerHTML = `<span class="red">오류: ${e.message}</span>`
+    $('reco-progress').innerHTML = `<span class="red">오류: ${esc(e.message)}</span>`
   } finally {
     $('reco-btn').disabled = false
   }
@@ -339,7 +344,7 @@ $('conv-run').addEventListener('click', async () => {
       (r.truncated ? ' · <span class="red">출력 한도로 잘렸습니다 — 원문을 나눠 변환하세요</span>' : '')
     if (!r.truncated) await measureSavings()
   } catch (e) {
-    $('conv-status').innerHTML = `<span class="red">${e.message}</span>`
+    $('conv-status').innerHTML = `<span class="red">${esc(e.message)}</span>`
   } finally {
     $('conv-run').disabled = false
   }
@@ -378,7 +383,7 @@ async function measureSavings() {
     }
     $('conv-savings').innerHTML = html
   } catch (e) {
-    $('conv-savings').innerHTML = `<span class="red">측정 오류: ${e.message}</span>`
+    $('conv-savings').innerHTML = `<span class="red">측정 오류: ${esc(e.message)}</span>`
   }
 }
 
@@ -501,7 +506,7 @@ async function runDuel() {
     $('blind-preview-frame').srcdoc = ''
     $('blind-arena').style.display = ''
   } catch (e) {
-    $('blind-status').innerHTML = `<span class="red">${e.message}</span>`
+    $('blind-status').innerHTML = `<span class="red">${esc(e.message)}</span>`
   } finally {
     $('blind-run').disabled = false
   }
@@ -690,7 +695,7 @@ $('exact-btn').addEventListener('click', async () => {
       `정확 토큰: <b class="green">${exact.toLocaleString()}</b> · 보정 추정 ${corrected.toLocaleString()} ` +
       `(편차 <b>${dev > 0 ? '+' : ''}${dev.toFixed(1)}%</b>) · 원시 로컬 ${currentTokens.length.toLocaleString()}`
   } catch (e) {
-    $('exact-result').innerHTML = `<span class="red">${e.message}</span>`
+    $('exact-result').innerHTML = `<span class="red">${esc(e.message)}</span>`
   } finally {
     $('exact-btn').disabled = false
   }
