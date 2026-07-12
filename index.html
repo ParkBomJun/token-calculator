@@ -242,17 +242,33 @@
         전적이 이 브라우저에 쌓입니다. "비싼 모델이 정말 내 작업에서 더 나은가"를 벤치마크가 아니라 직접 확인하는 도구입니다.
       </div>
       <div class="row" style="margin-top:8px">
+        <label style="margin:0"><input type="radio" name="blind-mode" value="model" checked /> 모델 대결 <span class="dim">(같은 프롬프트, 다른 모델)</span></label>
+        <label style="margin:0"><input type="radio" name="blind-mode" value="prompt" /> 프롬프트 대결 <span class="dim">(같은 모델, 원본 vs 수정본 — "모델 탓인가 프롬프트 탓인가")</span></label>
+      </div>
+      <div class="row" style="margin-top:8px">
         <div>
-          <label style="margin:0 0 2px">모델 A</label>
+          <label style="margin:0 0 2px" id="blind-a-label">모델 A</label>
           <select id="blind-a"></select>
         </div>
-        <div>
+        <div id="blind-b-wrap">
           <label style="margin:0 0 2px">모델 B</label>
           <select id="blind-b"></select>
         </div>
         <div>
           <label style="margin:0 0 2px">출력 한도 (tok)</label>
           <input type="number" id="blind-max" value="16384" min="1024" max="32768" step="1024" style="width:110px" />
+        </div>
+      </div>
+      <div id="blind-pb" style="display:none">
+        <label style="margin:8px 0 2px">프롬프트 B (수정본) — 위 메인 입력창의 원본이 프롬프트 A로 들어갑니다</label>
+        <textarea id="blind-prompt-b" style="min-height:110px" placeholder="원본을 고쳐 쓰거나, 아래 버튼으로 절약 지시문을 붙여 시작하세요"></textarea>
+        <div class="row" style="margin-top:6px">
+          <select id="blind-preset">
+            <option value="code">절약 지시문 — 코드 생성용</option>
+            <option value="writing">절약 지시문 — 글쓰기·요약용</option>
+            <option value="general">절약 지시문 — 일반용</option>
+          </select>
+          <button class="ghost mini" id="blind-fill">원본 + 지시문으로 채우기</button>
         </div>
       </div>
       <div class="row" style="margin-top:8px">

@@ -390,15 +390,43 @@ let currentDuel = null            // { slots: {1:{model,text,usage}, 2:{...}}, v
 $('blind-a').addEventListener('change', () => { blindTouched = true; updateBlindRoute() })
 $('blind-b').addEventListener('change', () => { blindTouched = true; updateBlindRoute() })
 
+// ── 대결 모드: 모델 대결(같은 프롬프트) / 프롬프트 대결(같은 모델, 원본 vs 수정본) ──
+// 프롬프트 대결은 "모델이 못한 건가, 프롬프트가 부실한 건가"를 변인 분리해서 검증한다.
+const blindMode = () => document.querySelector('input[name="blind-mode"]:checked').value
+
+const SAVING_DIRECTIVES = {
+  code: '\n\n[출력 규칙]\n- 완성된 코드만 출력할 것 (설명·인사말·후속 제안·스타일 옵션 나열 금지)\n- 단일 코드 블록으로, 처음부터 끝까지 그대로 실행 가능한 완전한 코드일 것\n- 설명이 필요하면 코드 안의 주석으로만 할 것',
+  writing: '\n\n[출력 규칙]\n- 결과물 본문만 출력할 것 (서론·메타 설명·"도움이 되셨나요" 류 후속 멘트 금지)\n- 요청한 분량과 형식을 정확히 지킬 것',
+  general: '\n\n[출력 규칙]\n- 질문에 대한 답만 출력할 것 (인사말·배경 설명·되묻기 금지)\n- 같은 내용을 요약으로 반복하지 말 것',
+}
+
+for (const radio of document.querySelectorAll('input[name="blind-mode"]')) {
+  radio.addEventListener('change', () => {
+    const pm = blindMode() === 'prompt'
+    $('blind-b-wrap').style.display = pm ? 'none' : ''
+    $('blind-pb').style.display = pm ? '' : 'none'
+    $('blind-a-label').textContent = pm ? '모델' : '모델 A'
+    updateBlindRoute()
+  })
+}
+
+$('blind-fill').addEventListener('click', () => {
+  const text = $('input').value
+  if (!text) { $('blind-status').innerHTML = '<span class="red">먼저 위 메인 입력창에 원본 프롬프트를 입력하세요</span>'; return }
+  $('blind-prompt-b').value = text + SAVING_DIRECTIVES[$('blind-preset').value]
+})
+
 // 대진의 호출 경로 미리보기 — 어느 쪽이 직행이고 어느 쪽이 폴백인지 실행 전에 보여준다
 function updateBlindRoute() {
+  const fmt = (m) => routeFor(m) ?? '키 없음'
   const a = getModel($('blind-a').value)
-  const b = getModel($('blind-b').value)
-  if (!a || !b) { $('blind-route').textContent = ''; return }
-  const fmt = (m) => {
-    const r = routeFor(m)
-    return r ?? '키 없음'
+  if (!a) { $('blind-route').textContent = ''; return }
+  if (blindMode() === 'prompt') {
+    $('blind-route').textContent = `경로: ${fmt(a)} (동일 모델 2회 호출)`
+    return
   }
+  const b = getModel($('blind-b').value)
+  if (!b) { $('blind-route').textContent = ''; return }
   $('blind-route').textContent = `경로: A ${fmt(a)} · B ${fmt(b)}`
 }
 
@@ -413,28 +441,46 @@ function updateBlindDefaults(result) {
   }
 }
 
-async function runDuel() {
+// 모드별 대진 구성: [{ model, prompt, name, tallyId }, ...] 또는 오류 문자열
+function duelCandidates() {
   const text = $('input').value
+  if (!text) return '먼저 위 메인 입력창에 프롬프트를 입력하세요'
   const a = getModel($('blind-a').value)
+  if (blindMode() === 'prompt') {
+    const pb = $('blind-prompt-b').value.trim()
+    if (!pb) return '프롬프트 B(수정본)를 입력하세요 — "원본 + 지시문으로 채우기"로 시작할 수 있습니다'
+    if (pb === text.trim()) return '프롬프트 A와 B가 동일합니다 — 수정본을 바꿔보세요'
+    return [
+      { model: a, prompt: text, name: '원본 프롬프트', tallyId: `${a.id}#원본` },
+      { model: a, prompt: pb, name: '수정본 프롬프트', tallyId: `${a.id}#수정본` },
+    ]
+  }
   const b = getModel($('blind-b').value)
-  if (!text) { $('blind-status').innerHTML = '<span class="red">먼저 위에 프롬프트를 입력하세요</span>'; return }
-  if (a.id === b.id) { $('blind-status').innerHTML = '<span class="red">서로 다른 두 모델을 고르세요</span>'; return }
+  if (a.id === b.id) return '서로 다른 두 모델을 고르세요'
+  return [
+    { model: a, prompt: text, name: a.name, tallyId: a.id },
+    { model: b, prompt: text, name: b.name, tallyId: b.id },
+  ]
+}
+
+async function runDuel() {
+  const cands = duelCandidates()
+  if (typeof cands === 'string') { $('blind-status').innerHTML = `<span class="red">${cands}</span>`; return }
 
   // 전용 출력 한도 — 비용 계산용 "예상 출력 토큰"과 분리 (코드 생성 대결은 만 토큰 이상 필요)
   const maxTokens = Math.min(32768, Math.max(1024, Number($('blind-max').value) || 16384))
   $('blind-run').disabled = true
   $('blind-arena').style.display = 'none'
-  $('blind-status').textContent = `두 모델 생성 중... (출력 한도 ${maxTokens.toLocaleString()} tok)`
+  $('blind-status').textContent = `두 응답 생성 중... (출력 한도 ${maxTokens.toLocaleString()} tok)`
   try {
-    const wrap = (m) => generate(m, text, maxTokens)
-      .catch((e) => { throw new Error(`${m.name}: ${e.message}`) })
-    const [ra, rb] = await Promise.all([wrap(a), wrap(b)])
-    // 무작위 순서 배치 — 여기서만 섞고, 투표 전에는 어떤 UI에도 모델을 노출하지 않는다
+    const wrap = (c) => generate(c.model, c.prompt, maxTokens)
+      .then((r) => ({ ...c, ...r }))
+      .catch((e) => { throw new Error(`${c.name}: ${e.message}`) })
+    const [ra, rb] = await Promise.all(cands.map(wrap))
+    // 무작위 순서 배치 — 여기서만 섞고, 투표 전에는 어떤 UI에도 정체를 노출하지 않는다
     const flip = Math.random() < 0.5
     currentDuel = {
-      slots: flip
-        ? { 1: { model: a, ...ra }, 2: { model: b, ...rb } }
-        : { 1: { model: b, ...rb }, 2: { model: a, ...ra } },
+      slots: flip ? { 1: ra, 2: rb } : { 1: rb, 2: ra },
       voted: false,
     }
     $('blind-t1').textContent = '응답 1'
@@ -446,10 +492,10 @@ async function runDuel() {
     // 잘림은 모델명을 밝히지 않고 응답 번호로만 경고 (블라인드 유지)
     const cut = [1, 2].filter((n) => currentDuel.slots[n].truncated)
     $('blind-status').innerHTML = cut.length
-      ? `<span class="red">⚠ 응답 ${cut.join('·')}이(가) 출력 한도로 잘렸습니다</span> — 위 "예상 출력 토큰"을 늘려 다시 대결하면 공정한 비교가 됩니다`
+      ? `<span class="red">⚠ 응답 ${cut.join('·')}이(가) 출력 한도로 잘렸습니다</span> — "출력 한도"를 늘려 다시 대결하면 공정한 비교가 됩니다`
       : ''
     $('blind-reveal').textContent = ''
-    renderTally(a.id, b.id)
+    renderTally(currentDuel.slots[1].tallyId, currentDuel.slots[2].tallyId)
     for (const id of ['blind-v1', 'blind-v2', 'blind-v0']) $(id).disabled = false
     $('blind-preview').style.display = 'none'
     $('blind-preview-frame').srcdoc = ''
@@ -467,30 +513,55 @@ function slotLabel(n) {
     inputTokens: s.usage?.prompt_tokens ?? 0,
     outputTokens: s.usage?.completion_tokens ?? 0,
   })
-  return `${s.model.name}${cost ? ` · ${formatUSD(cost.totalCost)}` : ''}` +
+  return `${s.name}${cost ? ` · ${formatUSD(cost.totalCost)}` : ''}` +
     ` (${s.via} · in ${(s.usage?.prompt_tokens ?? 0).toLocaleString()} / out ${(s.usage?.completion_tokens ?? 0).toLocaleString()} tok)`
 }
 
 function vote(winnerSlot) {
   if (!currentDuel || currentDuel.voted) return
   currentDuel.voted = true
-  const winnerId = winnerSlot ? currentDuel.slots[winnerSlot].model.id : null
-  const [id1, id2] = [currentDuel.slots[1].model.id, currentDuel.slots[2].model.id]
-  recordResult(id1, id2, winnerId)
-  $('blind-t1').textContent = `응답 1 — ${currentDuel.slots[1].model.name}${winnerSlot === 1 ? ' ✓' : ''}`
-  $('blind-t2').textContent = `응답 2 — ${currentDuel.slots[2].model.name}${winnerSlot === 2 ? ' ✓' : ''}`
-  $('blind-reveal').innerHTML =
+  const [s1, s2] = [currentDuel.slots[1], currentDuel.slots[2]]
+  recordResult(s1.tallyId, s2.tallyId, winnerSlot ? currentDuel.slots[winnerSlot].tallyId : null)
+  $('blind-t1').textContent = `응답 1 — ${s1.name}${winnerSlot === 1 ? ' ✓' : ''}`
+  $('blind-t2').textContent = `응답 2 — ${s2.name}${winnerSlot === 2 ? ' ✓' : ''}`
+  let html =
     `공개: 응답 1 = <b>${slotLabel(1)}</b> · 응답 2 = <b>${slotLabel(2)}</b>` +
     `<span class="dim"> (비용은 공식가 환산 — OpenRouter 청구가와 다를 수 있음)</span>`
-  renderTally(id1, id2)
+  // 프롬프트 대결: 수정본의 출력 토큰 절약 효과를 병기
+  if (blindMode() === 'prompt') {
+    const orig = [s1, s2].find((s) => s.tallyId.endsWith('#원본'))
+    const mod = [s1, s2].find((s) => s.tallyId.endsWith('#수정본'))
+    const [o, m] = [orig?.usage?.completion_tokens, mod?.usage?.completion_tokens]
+    if (o && m) {
+      const pct = ((m - o) / o * 100)
+      html += `<br />수정본 출력 토큰 ${o.toLocaleString()} → ${m.toLocaleString()} ` +
+        `(<b class="${pct <= 0 ? 'green' : 'red'}">${pct > 0 ? '+' : ''}${pct.toFixed(1)}%</b>)`
+    }
+  }
+  $('blind-reveal').innerHTML = html
+  renderTally(s1.tallyId, s2.tallyId)
   for (const id of ['blind-v1', 'blind-v2', 'blind-v0']) $(id).disabled = true
 }
 
 function renderTally(idA, idB) {
   const t = loadTally(idA, idB)
   if (!t.trials) { $('blind-tally').textContent = ''; return }
-  const [a, b] = [getModel(idA), getModel(idB)]
   const [wa, wb] = [t.wins[idA] ?? 0, t.wins[idB] ?? 0]
+
+  // 프롬프트 대결 전적 (tallyId = "<modelId>#원본" 형태)
+  if (idA.includes('#')) {
+    const model = getModel(idA.split('#')[0])
+    const [origId, modId] = idA.endsWith('#원본') ? [idA, idB] : [idB, idA]
+    const [wo, wm] = [t.wins[origId] ?? 0, t.wins[modId] ?? 0]
+    let html = `전적 — ${model.name} (${t.trials}회): 원본 ${wo}승 · 수정본 ${wm}승 · 무승부 ${t.ties}`
+    if (t.trials >= 3 && wm + t.ties >= wo) {
+      html += ` — <b class="green">지시문이 효과 있습니다. 모델을 바꾸기 전에 프롬프트부터 다듬을 가치가 있습니다</b>`
+    }
+    $('blind-tally').innerHTML = html
+    return
+  }
+
+  const [a, b] = [getModel(idA), getModel(idB)]
   let html = `전적 (${t.trials}회): ${a.name} ${wa}승 · ${b.name} ${wb}승 · 무승부 ${t.ties}`
   // 해석: 3회 이상이고 저가 모델이 과반을 안 내줬으면 "싼 쪽으로 충분" 신호
   const pa = effectivePricing(a); const pb = effectivePricing(b)
@@ -548,10 +619,11 @@ for (const n of [1, 2]) {
     let filename = `응답${n}.html`
     // 출처 기록은 투표(공개) 후에만 — 투표 전 저장은 익명 유지 (블라인드 보호)
     if (currentDuel.voted) {
+      const who = s.name === s.model.name ? s.model.name : `${s.model.name} · ${s.name}`
       code = `<!-- token-calculator 블라인드 대결 · ${new Date().toISOString().slice(0, 10)}\n` +
-        `  응답 ${n} = ${s.model.name} (${s.model.vendor}) · ${s.via}` +
+        `  응답 ${n} = ${who} (${s.model.vendor}) · ${s.via}` +
         ` · in ${s.usage?.prompt_tokens ?? '?'} / out ${s.usage?.completion_tokens ?? '?'} tok -->\n` + code
-      filename = `응답${n}_${s.model.name.replace(/[\\/:*?"<>| ]/g, '_')}.html`
+      filename = `응답${n}_${who.replace(/[\\/:*?"<>| ·]/g, '_')}.html`
     }
     const url = URL.createObjectURL(new Blob([code], { type: 'text/html' }))
     const a = document.createElement('a')
@@ -572,7 +644,9 @@ $('blind-v1').addEventListener('click', () => vote(1))
 $('blind-v2').addEventListener('click', () => vote(2))
 $('blind-v0').addEventListener('click', () => vote(null))
 $('blind-reset').addEventListener('click', () => {
-  resetTally($('blind-a').value, $('blind-b').value)
+  const a = $('blind-a').value
+  if (blindMode() === 'prompt') resetTally(`${a}#원본`, `${a}#수정본`)
+  else resetTally(a, $('blind-b').value)
   $('blind-tally').textContent = '전적을 초기화했습니다'
 })
 
