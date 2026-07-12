@@ -543,13 +543,22 @@ for (const n of [1, 2]) {
   })
   $(`blind-save${n}`).addEventListener('click', () => {
     if (!currentDuel) return
-    const code = extractCode(currentDuel.slots[n].text) ?? currentDuel.slots[n].text
+    const s = currentDuel.slots[n]
+    let code = extractCode(s.text) ?? s.text
+    let filename = `응답${n}.html`
+    // 출처 기록은 투표(공개) 후에만 — 투표 전 저장은 익명 유지 (블라인드 보호)
+    if (currentDuel.voted) {
+      code = `<!-- token-calculator 블라인드 대결 · ${new Date().toISOString().slice(0, 10)}\n` +
+        `  응답 ${n} = ${s.model.name} (${s.model.vendor}) · ${s.via}` +
+        ` · in ${s.usage?.prompt_tokens ?? '?'} / out ${s.usage?.completion_tokens ?? '?'} tok -->\n` + code
+      filename = `응답${n}_${s.model.name.replace(/[\\/:*?"<>| ]/g, '_')}.html`
+    }
     const url = URL.createObjectURL(new Blob([code], { type: 'text/html' }))
     const a = document.createElement('a')
-    a.href = url; a.download = `응답${n}.html`
+    a.href = url; a.download = filename
     a.click()
     URL.revokeObjectURL(url)
-    flashMsg(n, '저장됨 — 로컬에서 열면 JS까지 실행됩니다')
+    flashMsg(n, currentDuel.voted ? '저장됨 — 파일 상단 주석에 모델 출처 기록' : '저장됨 (투표 전 — 익명, 로컬에서 열면 JS 실행)')
   })
 }
 $('blind-preview-close').addEventListener('click', () => {
